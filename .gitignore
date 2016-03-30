@@ -1,0 +1,7 @@
+.idea/
+*.iml
+
+# Ignore everything in images...
+images/
+# except stuff in images/raw/
+!images/raw/
