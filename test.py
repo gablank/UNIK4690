@@ -1,172 +1,89 @@
 #!/usr/bin/python3
 import numpy as np
-import matplotlib as plt
+from matplotlib import pyplot as plt
 import cv2
 from os import walk
 
 
+def minimize_sum_of_squared_gradients(img):
+    center_x, center_y = len(img[0]) / 2, len(img) / 2
 
-def showKeypoints(img):
-    # works well
-    # surf = cv.xfeatures2d.SURF_create(700)
-    # img = cv.GaussianBlur(img, (17, 17), 0)
+    min_radius, max_radius = 15, 30
 
-    # works very well
-    # surf = cv.xfeatures2d.SURF_create(3000)
-    #blurred = img
-    # grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #
-    # cv2.namedWindow('image')
-    #
-    # def cannyAndShow(x):
-    #     lowerLimit = cv2.getTrackbarPos("Lower", "image")
-    #     upperLimit = cv2.getTrackbarPos("Upper", "image")
-    #     blur = cv2.getTrackbarPos("Blur", "image")
-    #     if blur % 2 != 1:
-    #         blur += 1
-    #         cv2.setTrackbarPos("Blur", "image", blur)
-    #     blurred = cv2.GaussianBlur(grayscale, (blur, blur), 0)
-    #     lowerLimit = upperLimit/2
-    #     cv2.setTrackbarPos("Lower", "image", int(lowerLimit))
-    #     edges = cv2.Canny(blurred, lowerLimit, upperLimit)
-    #     cv2.imshow("image", edges)
-    #
-    # # create trackbars for color change
-    # cv2.createTrackbar('Blur', 'image', 0, 13, cannyAndShow)
-    # cv2.createTrackbar('Lower', 'image', 0, 1000, cannyAndShow)
-    # cv2.createTrackbar('Upper', 'image', 0, 1000, cannyAndShow)
-    #
-    # cannyAndShow(None)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    #
-    # circles = cv2.HoughCircles(grayscale, cv2.HOUGH_GRADIENT, 1, 20, param1=upperLimit, param2=20, minRadius=5, maxRadius=22)
-    #
-    # if circles is not None:
-    #     circles = np.uint16(np.around(circles))
-    #     for i in circles[0,:]:
-    #         # draw the outer circle
-    #         cv2.circle(grayscale,(i[0],i[1]),i[2],(0,255,0),2)
-    #         # draw the center of the circle
-    #         cv2.circle(grayscale,(i[0],i[1]),2,(0,0,255),3)
-    #
-    #     cv2.imshow("test", grayscale)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    # return
-    surf = cv2.xfeatures2d.SURF_create(2500)
-    blurred = img
+    min_sum = float("INF")
+    best_param = None
+    for radius in range(min_radius, max_radius+1):
+        for d_x in range(-10, 11):
+            cur_x = center_x + d_x
+            for d_y in range(-10, 11):
+                cur_y = center_y + d_y
 
-    LAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    L = LAB[:,:,0]
-    A = LAB[:,:,1]
-    B = LAB[:,:,2]
-    #cv2.imshow("L", L)
-    #cv2.waitKey(0)
-    #cv2.imshow("A", A)
-    #cv2.waitKey(0)
-    #cv2.imshow("B", B)
-    #cv2.waitKey(0)
+                def dist_func(row, col):
+                    import math
+                    return math.sqrt((row-cur_y)**2 + (col-cur_x)**2) <= radius
 
-    HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    H = HSV[:,:,0]
-    S = HSV[:,:,1]
-    V = HSV[:,:,2]
-    #cv2.imshow("H", H)
-    #cv2.waitKey(0)
-    #cv2.imshow("S", S)
-    #cv2.waitKey(0)
-    #cv2.imshow("V", V)
-    #cv2.waitKey(0)
+                this_sum = sum_of_squared_gradients(img, dist_func)
+                if this_sum < min_sum:
+                    min_sum = this_sum
+                    best_param = (radius, cur_x, cur_y)
 
-    YCrCb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-    Y = YCrCb[:,:,0]
-    Cr = YCrCb[:,:,1]
-    Cv = YCrCb[:,:,2]
-    #cv2.imshow("Y", Y)
-    #cv2.waitKey(0)
-    #cv2.imshow("Cr", Cr)
-    #cv2.waitKey(0)
-    #cv2.imshow("Cv", Cv)
-    #cv2.waitKey(0)
+    print(min_sum, best_param)
+    return best_param
 
-    #Y = cv2.GaussianBlur(Y, (1, 1), 0)
-    #cv2.imshow("y", Y)
-    #cv2.waitKey(0)
-    Y_float = Y.astype(np.float32)
-    Y_float *= 1./255
 
-    Y2 = np.power(Y_float, 2)
-    #cv2.imshow("Y_float", Y2)
-    #cv2.waitKey(0)
-    Y3 = np.power(Y_float, 3)
-    #cv2.imshow("Y_float", Y3)
-    #cv2.waitKey(0)
-    Y4 = np.power(Y_float, 4)
-    #cv2.imshow("Y_float", Y4)
-    #cv2.waitKey(0)
-    # grayscale = img
-    # grayscale = cv2.split(grayscale)[0]
-    blurred = cv2.GaussianBlur(Y, (11, 11), 0)
-    #  surf = cv2.xfeatures2d.SIFT_create(80)
+# Returns average of squared gradients
+def sum_of_squared_gradients(img, dist_func=None):
+    x_first = img[:,:-1].astype(np.int64)
+    x_last = img[:,1:].astype(np.int64)
 
-    darkBlobParams = cv2.SimpleBlobDetector_Params()
-    darkBlobParams.filterByArea = True
-    darkBlobParams.minArea = 70
-    darkBlobParams.maxArea = 150
-    darkBlobParams.minDistBetweenBlobs = 1
-    darkBlobParams.blobColor = 0
-    darkBlobParams.filterByConvexity = False
-    darkBlobDetector = cv2.SimpleBlobDetector_create(darkBlobParams)
+    y_first = img[:-1,:].astype(np.int64)
+    y_last = img[1:,:].astype(np.int64)
 
-    lightBlobParams = cv2.SimpleBlobDetector_Params()
-    lightBlobParams.filterByArea = True
-    lightBlobParams.minArea = 70
-    lightBlobParams.maxArea = 500
-    lightBlobParams.minDistBetweenBlobs = 1
-    lightBlobParams.blobColor = 255
-    lightBlobParams.filterByConvexity = False
-    lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
+    x_gradient_squared = np.power(x_last - x_first, 2)
+    y_gradient_squared = np.power(y_last - y_first, 2)
 
-    Y = Y3
+    if dist_func is None:
+        x_sum = np.sum(x_gradient_squared)
+        y_sum = np.sum(y_gradient_squared)
 
-    amax = np.amax(Y)
-    light = Y / amax
-    light *= 255
-    light = np.clip(light, 0, 255)
-    light = light.astype(np.uint8)
+        return (x_sum + y_sum) / (len(img[0])+len(img))
 
-    avg = np.average(Y)
-    dark = Y / (3*avg)
-    dark *= 255
-    dark = np.clip(dark, 0, 255)
-    dark = dark.astype(np.uint8)
+    else:
+        sum_gradient = 0
+        num_gradients = 0
+        for row in range(len(img)):
+            for col in range(len(img[0])):
+                if dist_func(row, col):
+                    if row < len(y_gradient_squared):
+                        sum_gradient += y_gradient_squared[row, col]
+                    if col < len(x_gradient_squared[0]):
+                        sum_gradient += x_gradient_squared[row, col]
+                    num_gradients += 1
 
-    dark = cv2.GaussianBlur(dark, (15, 15), 0)
-    kpDark = darkBlobDetector.detect(dark)
-
-    light = cv2.GaussianBlur(light, (11, 11), 0)
-    kpLight = lightBlobDetector.detect(light)
-    #kp, des = surf.detectAndCompute(blurred, None)
-
-    keypointsImg = img.copy()
-    cv2.drawKeypoints(img, kpDark, keypointsImg, color=[0, 0, 255])
-    cv2.drawKeypoints(keypointsImg, kpLight, keypointsImg, color=[255, 0, 0])
-
-    cv2.imshow("Keypoints", keypointsImg)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        return np.sum(sum_gradient) / num_gradients
 
 
 if __name__ == "__main__":
-    filenames = []
-    for cur in walk("images/raw/"):
-        filenames = cur[2]
-        break
+    filename = "IMG_20160330_155620.jpg"
 
-    for filename in filenames:
-        if filename is not "." and filename is not "..":
-            img = cv2.imread("images/1920x1080/" + filename)
-            # img = cv2.imread("images/800x600/" + filename)
-            # img = cv2.imread("images/3840x2160/" + filename)
-            showKeypoints(img)
+    img = cv2.imread("images/1920x1080/" + filename)
+
+    not_ball = img[690:719, 460:489]
+    # plt.imshow(cv2.cvtColor(not_ball, cv2.COLOR_BGR2RGB), interpolation='bicubic')
+    # plt.show()
+
+    # ball = img[649:678, 436:465]
+    ball = img[640:698, 430:485]
+    # plt.imshow(cv2.cvtColor(ball, cv2.COLOR_BGR2RGB), interpolation='bicubic')
+    # plt.show()
+
+    print(sum_of_squared_gradients(not_ball))
+    print(sum_of_squared_gradients(ball))
+
+    # cv2.imshow("test", img)
+    # cv2.waitKey(0)
+
+    radius, x, y = minimize_sum_of_squared_gradients(ball)
+    cv2.circle(ball, (int(x), int(y)), radius, [255,0,0])
+    cv2.imshow("test", ball)
+    cv2.waitKey(0)
