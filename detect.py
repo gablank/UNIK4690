@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib as plt
 import cv2
 from os import walk
-
+from test import minimize_sum_of_squared_gradients, sum_of_squared_gradients
 
 
 def showKeypoints(img):
@@ -149,9 +149,32 @@ def showKeypoints(img):
     kpLight = lightBlobDetector.detect(light)
     #kp, des = surf.detectAndCompute(blurred, None)
 
+    window_size = 5
+    best_dark = [(None, float("INF"))] * 10
+    best_light = [(None, float("INF"))] * 10
+    for keypoint in kpDark:
+        y,x = int(keypoint.pt[0]), int(keypoint.pt[1])
+        this = sum_of_squared_gradients(img[y-window_size:y+window_size+1, x-window_size:x+window_size+1])
+        if this < best_dark[-1][1]:
+            best_dark[-1] = (keypoint, this)
+            best_dark.sort(key=lambda x: x[1])
+
+    for keypoint in kpLight:
+        y,x = int(keypoint.pt[0]), int(keypoint.pt[1])
+        this = sum_of_squared_gradients(img[y-window_size:y+window_size+1, x-window_size:x+window_size+1])
+        if this < best_dark[-1][1]:
+            best_light[-1] = (keypoint, this)
+            best_light.sort(key=lambda x: x[1])
+
+    print(best_dark)
+    print(best_light)
+    best_kp = [i[0] for i in best_dark if i[0] is not None]
+    best_kp += [i[0] for i in best_light if i[0] is not None]
+
     keypointsImg = img.copy()
     cv2.drawKeypoints(img, kpDark, keypointsImg, color=[0, 0, 255])
     cv2.drawKeypoints(keypointsImg, kpLight, keypointsImg, color=[255, 0, 0])
+    cv2.drawKeypoints(keypointsImg, best_kp, keypointsImg, color=[0, 255, 0])
 
     cv2.imshow("Keypoints", keypointsImg)
     cv2.waitKey(0)
