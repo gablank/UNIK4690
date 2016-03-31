@@ -5,10 +5,19 @@ import cv2
 from os import walk
 
 
-def minimize_sum_of_squared_gradients(img):
-    center_x, center_y = len(img[0]) / 2, len(img) / 2
+def cmask(center, radius, array):
+    # print(center)
+    # print(radius)
+    a, b = center
+    ny, nx, _ = array.shape
+    y, x = np.ogrid[-b:ny-b, -a:nx-a]
+    return x*x + y*y <= radius*radius
 
-    min_radius, max_radius = 15, 30
+
+def minimize_sum_of_squared_gradients(img):
+    center_x, center_y = int(len(img[0]) / 2), int(len(img) / 2)
+
+    min_radius, max_radius = 10, 25
 
     min_sum = float("INF")
     best_param = None
@@ -18,11 +27,7 @@ def minimize_sum_of_squared_gradients(img):
             for d_y in range(-10, 11):
                 cur_y = center_y + d_y
 
-                def dist_func(row, col):
-                    import math
-                    return math.sqrt((row-cur_y)**2 + (col-cur_x)**2) <= radius
-
-                this_sum = sum_of_squared_gradients(img, dist_func)
+                this_sum = sum_of_squared_gradients(img, cmask((cur_x, cur_y), radius, img[:-1,:-1]))
                 if this_sum < min_sum:
                     min_sum = this_sum
                     best_param = (radius, cur_x, cur_y)
@@ -32,35 +37,35 @@ def minimize_sum_of_squared_gradients(img):
 
 
 # Returns average of squared gradients
-def sum_of_squared_gradients(img, dist_func=None):
-    x_first = img[:,:-1].astype(np.int64)
-    x_last = img[:,1:].astype(np.int64)
+def sum_of_squared_gradients(img, mask=None):
+    if len(img) == 0 or len(img[0]) == 0:
+        return float("INF")
 
-    y_first = img[:-1,:].astype(np.int64)
-    y_last = img[1:,:].astype(np.int64)
+    x_first = img[:-1,:-1].astype(np.int64)
+    x_last = img[:-1,1:].astype(np.int64)
+
+    y_first = img[:-1,:-1].astype(np.int64)
+    y_last = img[1:,:-1].astype(np.int64)
 
     x_gradient_squared = np.power(x_last - x_first, 2)
     y_gradient_squared = np.power(y_last - y_first, 2)
 
-    if dist_func is None:
+    if mask is None:
         x_sum = np.sum(x_gradient_squared)
         y_sum = np.sum(y_gradient_squared)
 
         return (x_sum + y_sum) / (len(img[0])+len(img))
 
     else:
-        sum_gradient = 0
-        num_gradients = 0
-        for row in range(len(img)):
-            for col in range(len(img[0])):
-                if dist_func(row, col):
-                    if row < len(y_gradient_squared):
-                        sum_gradient += y_gradient_squared[row, col]
-                    if col < len(x_gradient_squared[0]):
-                        sum_gradient += x_gradient_squared[row, col]
-                    num_gradients += 1
+        # print()
+        # print(img[mask])
+        # print(img)
 
-        return np.sum(sum_gradient) / num_gradients
+        sum_gradient = np.sum(x_gradient_squared[mask]) + np.sum(y_gradient_squared[mask])
+        num_gradients = np.sum(mask)
+
+        # We want to favor bigger matches, so we get a greedy search
+        return sum_gradient / (num_gradients**1.5)
 
 
 if __name__ == "__main__":
@@ -74,6 +79,7 @@ if __name__ == "__main__":
 
     # ball = img[649:678, 436:465]
     ball = img[640:698, 430:485]
+    # ball = img[688:698, 478:485]
     # plt.imshow(cv2.cvtColor(ball, cv2.COLOR_BGR2RGB), interpolation='bicubic')
     # plt.show()
 
