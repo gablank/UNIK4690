@@ -5,3 +5,6 @@
 images/
 # except stuff in images/raw/
 !images/raw/
+
+
+__pycache__/
