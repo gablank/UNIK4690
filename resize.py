@@ -40,6 +40,12 @@ if __name__ == "__main__":
 
             for res_x, res_y in target_sizes:
                 print("Resizing {} to {}x{}".format(filename, res_x, res_y))
-                resized = resize_keep_aspect_ratio(img, (res_x, res_y))
-                cv.imwrite("images/" + str(res_x) + "x" + str(res_y) + "/" + filename, resized)
+                # resized = resize_keep_aspect_ratio(img, (res_x, res_y))
+                # cv.imwrite("images/" + str(res_x) + "x" + str(res_y) + "/" + filename, resized)
+
+            # Rescale:
+            rescaled = cv.resize(img, (0, 0), fx=0.5, fy=0.5, interpolation=cv.INTER_CUBIC)
+            cv.imwrite("images/0.5/" + filename, rescaled)
+            rescaled = cv.resize(img, (0, 0), fx=0.25, fy=0.25, interpolation=cv.INTER_CUBIC)
+            cv.imwrite("images/0.25/" + filename, rescaled)
 

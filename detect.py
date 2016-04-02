@@ -6,7 +6,428 @@ from os import walk
 from test import minimize_sum_of_squared_gradients, sum_of_squared_gradients
 
 
-def showKeypoints(img):
+# lower score is better
+def calc_density_score(img, points):
+    poly = np.zeros(img.shape)
+    cv2.fillConvexPoly(poly, np.array(points), [255, 255, 255])
+
+    area = np.count_nonzero(poly)
+    poly = img.copy()
+    cv2.fillConvexPoly(poly, np.array(points), [255, 255, 255])
+
+    n_black_px = np.count_nonzero(poly) - np.count_nonzero(img)
+
+    # Works fairly well
+    # black_density = n_black_px / area
+    #
+    # return black_density - 0.0000001*area
+
+    tot_black_density = (img.shape[0]*img.shape[1] - np.count_nonzero(img)) / (img.shape[0]*img.shape[1])
+
+    black_density = n_black_px / area
+
+    return black_density / (tot_black_density + 0.00000001*area)
+
+
+def maximize_density(img):
+    height, width = img.shape
+
+    center_y = int(height / 2)
+    center_x = int(width / 2)
+
+    min_vertical_box = (center_x-1, center_x+1)
+    max_vertical_box = (0, width-1)
+    min_horizontal_box = (center_y-1, center_y+1)
+    max_horizontal_box = (0, height-1)
+
+    # Default to 4% of the minimum dimension
+    initial_box_side = int(min(width, height) * 0.04)
+
+    p0 = (center_x - initial_box_side, center_y - initial_box_side)
+    p1 = (center_x - initial_box_side, center_y + initial_box_side)
+    p2 = (center_x + initial_box_side, center_y + initial_box_side)
+    p3 = (center_x + initial_box_side, center_y - initial_box_side)
+
+    # Polygon:
+    #            p3
+    #   p0
+    #
+    #  p1      p2
+    #
+
+    cur_score = calc_density_score(img, [p0, p1, p2, p3])
+
+    threshold = (width*height - np.count_nonzero(img)) / (0.8*width*height)
+
+    while True:
+        change = False
+        new_p0 = (max(0, p0[0]-10), p0[1])
+        new_p1 = (max(0, p1[0]-10), p1[1])
+        if new_p0 != p0 or new_p1 != p1:
+            delta_score = calc_density_score(img, [new_p0, new_p1, p1, p0])
+            if delta_score < threshold:
+                p0 = new_p0
+                p1 = new_p1
+                change = True
+
+        new_p2 = (min(width-1, p2[0]+10), p2[1])
+        new_p3 = (min(width-1, p3[0]+10), p3[1])
+        if new_p2 != p2 or new_p3 != p3:
+            delta_score = calc_density_score(img, [p2, p3, new_p3, new_p2])
+            if delta_score < threshold:
+                p2 = new_p2
+                p3 = new_p3
+                change = True
+
+        if not change:
+            break
+
+    while True:
+        change = False
+        new_p0 = (p0[0], max(0, p0[1]-10))
+        new_p3 = (p3[0], max(0, p3[1]-10))
+        if new_p0 != p0 or new_p3 != p3:
+            delta_score = calc_density_score(img, [new_p0, p0, p3, new_p3])
+            if delta_score < threshold:
+                p0 = new_p0
+                p3 = new_p3
+                change = True
+
+        new_p1 = (p1[0], min(height-1, p1[1]+10))
+        new_p2 = (p2[0], min(height-1, p2[1]+10))
+        if new_p1 != p1 or new_p2 != p2:
+            delta_score = calc_density_score(img, [p1, new_p1, new_p2, p2])
+            if delta_score < threshold:
+                p1 = new_p1
+                p2 = new_p2
+                change = True
+
+        if not change:
+            break
+
+
+    cur_score = calc_density_score(img, [p0, p1, p2, p3])
+    print(cur_score)
+    rate = 2**6
+    while rate > 0:
+        change = False
+        # p0
+        p0s = []
+        for di in (-rate, 0, rate):
+            for dj in (-rate, 0, rate):
+                if di == dj == 0:
+                    continue
+
+                new_p0 = (min(width-1, max(0, p0[0]+rate)), min(height-1, max(0, p0[1]+rate)))
+                if new_p0 == p0:
+                    continue
+                if new_p0[0] + 100 > p3[0] or new_p0[1] + 100 > p1[1]:
+                    continue
+
+                new_score = calc_density_score(img, [new_p0, p1, p2, p3])
+                if new_score < cur_score:
+                    p0s.append((new_p0, new_score))
+
+        if len(p0s) > 0:
+            change = True
+            p0s.sort(key=lambda x: x[0])
+            p0 = p0s[0][0]
+
+
+        # p1
+        p1s = []
+        for di in (-rate, 0, rate):
+            for dj in (-rate, 0, rate):
+                if di == dj == 0:
+                    continue
+
+                new_p1 = (min(width-1, max(0, p1[0]+rate)), min(height-1, max(0, p1[1]+rate)))
+                if new_p1 == p1:
+                    continue
+                if new_p1[0] + 100 > p2[0] or new_p1[1] - 100 < p0[1]:
+                    continue
+
+                new_score = calc_density_score(img, [p0, new_p1, p2, p3])
+                if new_score < cur_score:
+                    p1s.append((new_p1, new_score))
+
+        if len(p1s) > 0:
+            change = True
+            p1s.sort(key=lambda x: x[0])
+            p1 = p1s[0][0]
+
+        # p2
+        p2s = []
+        for di in (-rate, 0, rate):
+            for dj in (-rate, 0, rate):
+                if di == dj == 0:
+                    continue
+
+                new_p2 = (min(width-1, max(0, p2[0]+rate)), min(height-1, max(0, p2[1]+rate)))
+                if new_p2 == p2:
+                    continue
+                if new_p2[0] - 100 < p1[0] or new_p2[1] - 100 < p3[1]:
+                    continue
+
+                new_score = calc_density_score(img, [p0, p1, new_p2, p3])
+                if new_score < cur_score:
+                    p2s.append((new_p2, new_score))
+
+        if len(p2s) > 0:
+            change = True
+            p2s.sort(key=lambda x: x[0])
+            p2 = p2s[0][0]
+
+        # p3
+        p3s = []
+        for di in (-rate, 0, rate):
+            for dj in (-rate, 0, rate):
+                if di == dj == 0:
+                    continue
+
+                new_p3 = (min(width-1, max(0, p3[0]+rate)), min(height-1, max(0, p3[1]+rate)))
+                if new_p3 == p3:
+                    continue
+                if new_p3[0] - 100 < p0[0] or new_p3[1] + 100 > p2[1]:
+                    continue
+
+                new_score = calc_density_score(img, [p0, p1, p2, new_p3])
+                if new_score < cur_score:
+                    p3s.append((new_p3, new_score))
+
+        if len(p3s) > 0:
+            change = True
+            p3s.sort(key=lambda x: x[0])
+            p3 = p3s[0][0]
+
+        if not change:
+            rate = int(rate / 2)
+            print(rate)
+
+
+    return [p0, p1, p2, p3]
+
+    while True:
+        change = False
+        # p0
+        new_p = (max(0, p0[0]-10), p0[1])
+        new_score = calc_density_score(img, [new_p, p1, p2, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p0 = new_p
+            cur_score = new_score
+            change = True
+
+        new_p = (p0[0], max(0, p0[1]-10))
+        new_score = calc_density_score(img, [new_p, p1, p2, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p0 = new_p
+            cur_score = new_score
+            change = True
+
+        # p1
+        new_p = (max(0, p1[0]-10), p1[1])
+        new_score = calc_density_score(img, [p0, new_p, p2, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p1 = new_p
+            cur_score = new_score
+            change = True
+
+        new_p = (p1[0], min(height-1, p1[1]+10))
+        new_score = calc_density_score(img, [p0, new_p, p2, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p1 = new_p
+            cur_score = new_score
+            change = True
+
+        # p2
+        new_p = (min(width-1, p2[0]+10), p2[1])
+        new_score = calc_density_score(img, [p0, p1, new_p, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p2 = new_p
+            cur_score = new_score
+            change = True
+
+        new_p = (p2[0], min(height-1, p2[1]+10))
+        new_score = calc_density_score(img, [p0, p1, new_p, p3])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p2 = new_p
+            cur_score = new_score
+            change = True
+
+        # p3
+        new_p = (min(width-1, p3[0]+10), p3[1])
+        new_score = calc_density_score(img, [p0, p1, p2, new_p])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p3 = new_p
+            cur_score = new_score
+            change = True
+
+        new_p = (p3[0], min(0, p3[1]-10))
+        new_score = calc_density_score(img, [p0, p1, p2, new_p])
+        # print(cur_score, new_score)
+        if new_score < cur_score:
+            p3 = new_p
+            cur_score = new_score
+            change = True
+
+        if not change:
+            break
+
+    return [p0, p1, p2, p3]
+
+
+def detect_playing_field(img):
+    r, g, b = img[:,:,0].astype(int), img[:,:,1].astype(int), img[:,:,2].astype(int)
+    # r_g = b-r-g
+    r_g = np.absolute(r - g)
+    r_b = np.absolute(r - b)
+    g_b = np.absolute(g - b)
+    diff = np.maximum(np.maximum(r_g, r_b), g_b).astype(np.uint8)
+
+    diff = cv2.blur(diff, (3,3))
+    diff = cv2.adaptiveThreshold(diff, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 5)
+
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+    diff = cv2.dilate(diff, dilationElement)
+    # diff = cv2.erode(diff, erosionElement)
+    diff = cv2.erode(diff, erosionElement)
+
+    # diff = g_b.astype(np.uint8) * (255 / np.amax(g_b))
+    # diff = cv2.blur(g_b, (3,3))
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    # erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+    # diff = cv2.dilate(diff, dilationElement)
+    # diff = cv2.erode(diff, erosionElement)
+    # diff = cv2.erode(diff, erosionElement)
+    # cv2.imshow("img", img)
+    # cv2.waitKey(0)
+    # cv2.imshow("r_g", r_g.astype(np.uint8) * (255 / np.amax(r_g)))
+    # cv2.waitKey(0)
+    # cv2.imshow("r_b", r_b.astype(np.uint8) * (255 / np.amax(r_b)))
+    # cv2.waitKey(0)
+    g_b = (g_b * (255 / np.amax(g_b))).astype(np.uint8)
+    # kernel = np.array([0, 1, 0, 1, -4, 1, 0, 1, 0]).reshape((3,3))
+    kernel = np.ones((3,3), np.float32)
+    # g_b = cv2.filter2D(g_b, -1, kernel)
+
+    # erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+
+
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+    g_b = cv2.dilate(g_b, dilationElement, iterations=4)
+    g_b = cv2.erode(g_b, erosionElement, iterations=4)
+
+    g_b = cv2.adaptiveThreshold(g_b, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 19, 6)
+
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    g_b = cv2.dilate(g_b, dilationElement, iterations=1)
+    g_b = cv2.erode(g_b, erosionElement, iterations=5)
+
+    # g_b = cv2.convertScaleAbs(g_b)
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    # im2, contours, hierarchy = cv2.findContours(g_b, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # cv2.drawContours(g_b, contours, -1, (255,255,0), 3)
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+
+    # kernel = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1]).reshape((3,3)) / 9
+    # g_b = cv2.filter2D(g_b, -1, kernel)
+
+    # ret, g_b = cv2.threshold(g_b, 0, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+
+
+    points = maximize_density(g_b)
+
+    for idx, point in enumerate(points):
+        cv2.line(g_b, point, points[(idx+1)%len(points)], (0, 0, 255), 3)
+
+    # cv2.imshow("diff", diff)
+    # cv2.waitKey(0)
+    cv2.imshow("g_b", g_b)
+    cv2.waitKey(0)
+    return
+    im2, contours, hierarchy = cv2.findContours(g_b, cv2.RETR_FLOODFILL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(g_b, contours, -1, (0,255,0), 3)
+    cv2.imshow("g_b", g_b)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    return
+
+    avg = np.average(r_g)
+    ret, r_g = cv2.threshold(r_g, 1.5*avg, 255, cv2.THRESH_BINARY)
+    cv2.imshow("r-g", r_g)
+    cv2.waitKey(0)
+    # cv2.imshow("r", r)
+    # cv2.waitKey(0)
+    # cv2.imshow("g", g)
+    # cv2.waitKey(0)
+    # cv2.imshow("b", b)
+    # cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    return
+    img_diff = np.apply_along_axis(lambda x: np.max(x) - np.min(x) < 10, 2, img)
+    img_diff = img_diff.astype(np.float)
+    # img_mask = img_mask[..., np.newaxis]
+    # print(img_mask)
+    # print(img_mask.shape)
+
+    img_mask = np.zeros([img_diff.shape[0], img_diff.shape[1], 3]).astype(np.float)
+    img_mask[:,:,0] = img_diff
+    img_mask[:,:,1] = img_diff
+    img_mask[:,:,2] = img_diff
+
+    cv2.imshow("test", img_mask)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    return
+    exit(0)
+    copy = np.empty([x, y, 1])
+    for i in range(len(copy)):
+        for j in range(len(copy[i])):
+            copy[i,j] = max(img[i,j][0], img[i,j][1], img[i,j][2]) - min(img[i,j][0], img[i,j][1], img[i,j][2])
+
+    print(copy)
+    exit(0)
+    HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    H = HSV[:,:,0]
+    S = HSV[:,:,1]
+    V = HSV[:,:,2]
+
+    S_blur = cv2.GaussianBlur(S, (5, 5), 0)
+    # cv2.imshow("H", H)
+    # cv2.waitKey(0)
+    avg = np.average(S)
+    ret, S = cv2.threshold(S, 1.5*avg, 255, cv2.THRESH_BINARY)
+    cv2.imshow("S", S)
+    cv2.waitKey(0)
+    # cv2.imshow("S_blur", S_blur)
+    # cv2.waitKey(0)
+    # cv2.imshow("V", V)
+    # cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+def detection_method(img):
+    S = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    avg = np.average(S)
+    ret, S = cv2.threshold(S, 2*avg, 255, cv2.THRESH_BINARY)
+    cv2.imshow("S", S)
+    cv2.waitKey(0)
+
+
+def show_keypoints(img):
     # works well
     # surf = cv.xfeatures2d.SURF_create(700)
     # img = cv.GaussianBlur(img, (17, 17), 0)
@@ -189,7 +610,9 @@ if __name__ == "__main__":
 
     for filename in filenames:
         if filename is not "." and filename is not "..":
-            img = cv2.imread("images/1920x1080/" + filename)
+            # img = cv2.imread("images/1920x1080/" + filename)
+            img = cv2.imread("images/0.25/" + filename)
             # img = cv2.imread("images/800x600/" + filename)
             # img = cv2.imread("images/3840x2160/" + filename)
-            showKeypoints(img)
+            # showKeypoints(img)
+            detect_playing_field(img)
