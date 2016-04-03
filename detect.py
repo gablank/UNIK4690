@@ -306,8 +306,14 @@ def detect_playing_field(img):
     r_g = np.absolute(r - g)
     r_b = np.absolute(r - b)
     g_b = np.absolute(g - b)
+    #cv2.imshow("r_g", r_g)
+    #cv2.waitKey(0)
+    #cv2.imshow("r_b", r_b)
+    #cv2.waitKey(0)
     diff = np.maximum(np.maximum(r_g, r_b), g_b).astype(np.uint8)
 
+    #cv2.imshow("r_b", diff)
+    #cv2.waitKey(0)
     diff = cv2.blur(diff, (3,3))
     diff = cv2.adaptiveThreshold(diff, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 5)
 
@@ -341,21 +347,61 @@ def detect_playing_field(img):
     dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     g_b = cv2.dilate(g_b, dilationElement, iterations=4)
+    #cv2.imshow("test", g_b)
+    #cv2.waitKey(0)
     g_b = cv2.erode(g_b, erosionElement, iterations=4)
 
-    g_b = cv2.adaptiveThreshold(g_b, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 19, 6)
+    def adjust(val):
+        _, img = cv2.threshold(g_b, val, 255, cv2.THRESH_BINARY)
+        cv2.imshow("image", img)
+
+    _, g_b = cv2.threshold(g_b, 30, 255, cv2.THRESH_BINARY)
+    #cv2.namedWindow("image")
+    #cv2.createTrackbar("threshold", "image", 0, 255, adjust)
+    #cv2.imshow("image", g_b)
+    #cv2.waitKey(0)
+
+    #g_b = cv2.adaptiveThreshold(g_b, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 19, 6)
+
+    middle = (int(img.shape[1] / 2), int(img.shape[1] / 2))
+
+    box_size = 30
+    avg = np.average(g_b[middle[0]-box_size:middle[0]+box_size, middle[1]-box_size:middle[1]+box_size])
+    total_avg = np.average(g_b)
+    if avg > total_avg:
+        #cv2.imshow("test", g_b)
+        #cv2.waitKey(0)
+        g_b = 255 - g_b
+        avg = np.average(g_b[middle[0]-box_size:middle[0]+box_size, middle[1]-box_size:middle[1]+box_size])
+        total_avg = np.average(g_b)
+
+    g_b = cv2.blur(g_b, (15,15), 0)
+    ret, g_b = cv2.threshold(g_b, 0.6*avg, 255, cv2.THRESH_BINARY)
+    #cv2.imshow("g_b", g_b)
+    #cv2.waitKey(0)
+    #cv2.imshow("test", g_b)
+    #cv2.waitKey(0)
+
+    #result = cv2.floodFill(g_b, None, middle, 120)
+    #cv2.imshow("test", g_b)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
 
     dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
-    g_b = cv2.dilate(g_b, dilationElement, iterations=1)
+    g_b = cv2.dilate(g_b, dilationElement, iterations=5)
+    #cv2.imshow("g_b", g_b)
+    #cv2.waitKey(0)
     # g_b = cv2.erode(g_b, erosionElement, iterations=5)
     # g_b = cv2.erode(g_b, erosionElement, iterations=5)
     # g_b = cv2.erode(g_b, erosionElement, iterations=5)
     # g_b = cv2.erode(g_b, erosionElement, iterations=5)
     # g_b = cv2.erode(g_b, erosionElement, iterations=5)
-    g_b = cv2.erode(g_b, erosionElement, iterations=12)
+    g_b = cv2.erode(g_b, erosionElement, iterations=10)
 
+    #cv2.imshow("g_b", g_b)
+    #cv2.waitKey(0)
     # cv2.imshow("g_b", g_b)
     # cv2.waitKey(0)
     g_b = cv2.GaussianBlur(g_b, (25, 25), 0)
@@ -370,10 +416,10 @@ def detect_playing_field(img):
     # cv2.waitKey(0)
     middle = (int(img.shape[1] / 2), int(img.shape[1] / 2))
     result = cv2.floodFill(g_b, None, middle, 120)
-    print(result)
+    #print(result)
     _, g_b, _, _ = result
-    # cv2.imshow("g_b", g_b)
-    # cv2.waitKey(0)
+    #cv2.imshow("g_b", g_b)
+    #cv2.waitKey(0)
 
     g_b[np.where(g_b != 120)] = 0
     g_b[np.where(g_b != 0)] = 255
@@ -408,10 +454,11 @@ def detect_playing_field(img):
     # cv2.waitKey(0)
 
     im2, contours, hierarchy = cv2.findContours(g_b, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
 
-    polygon = cv2.approxPolyDP(contours[0], 50, True)
-    polygon = cv2.approxPolyDP(polygon, 100, True)
+    polygon = contours[0]
+    #polygon = cv2.approxPolyDP(contours[0], 50, True)
+    #polygon = cv2.approxPolyDP(polygon, 100, True)
     convexHull = cv2.convexHull(polygon)
 
     g_b[:,:] = 0
@@ -425,9 +472,9 @@ def detect_playing_field(img):
         pt2 = (pt2[0], pt2[1])
         cv2.line(img, pt1, pt2, (0,0,255), 3)
 
-    # cv2.imshow("playing_field", img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    cv2.imshow("playing_field", img)
+    cv2.waitKey(30)
+    #cv2.destroyAllWindows()
 
     # Use g_b as a "mask" for img (I couldn't figure out the proper way to use it as a mask)
     for i in (0, 1, 2):
@@ -517,7 +564,7 @@ def detect_playing_field(img):
     # cv2.waitKey(0)
     # cv2.imshow("V", V)
     # cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
 
 
 def detection_method(img):
@@ -724,6 +771,13 @@ def show_keypoints(playing_field):
 
 
 if __name__ == "__main__":
+    cap = cv2.VideoCapture(1)
+
+    while True:
+        ret, frame = cap.read()
+        playing_field = detect_playing_field(frame)
+        #cv2.imshow("output", playing_field)
+
     filenames = []
     for cur in walk("images/raw/"):
         filenames = cur[2]
@@ -737,4 +791,5 @@ if __name__ == "__main__":
             # img = cv2.imread("images/3840x2160/" + filename)
             # showKeypoints(img)
             playing_field = detect_playing_field(img)
-            show_keypoints(playing_field)
+            cv2.waitKey(0)
+            #show_keypoints(playing_field)
