@@ -29,6 +29,21 @@ def calc_density_score(img, points):
     return black_density / (tot_black_density + 0.00000001*area)
 
 
+def calc_black_density(img, points):
+    poly = np.zeros(img.shape)
+    cv2.fillConvexPoly(poly, np.array(points), [255, 255, 255])
+
+    area = np.count_nonzero(poly)
+    poly = img.copy()
+    cv2.fillConvexPoly(poly, np.array(points), [255, 255, 255])
+
+    n_black_px = np.count_nonzero(poly) - np.count_nonzero(img)
+
+    black_density = n_black_px / area
+
+    return black_density
+
+
 def maximize_density(img):
     height, width = img.shape
 
@@ -47,7 +62,7 @@ def maximize_density(img):
     p1 = (center_x - initial_box_side, center_y + initial_box_side)
     p2 = (center_x + initial_box_side, center_y + initial_box_side)
     p3 = (center_x + initial_box_side, center_y - initial_box_side)
-
+    # return [p0, p1, p2, p3]
     # Polygon:
     #            p3
     #   p0
@@ -57,14 +72,16 @@ def maximize_density(img):
 
     cur_score = calc_density_score(img, [p0, p1, p2, p3])
 
-    threshold = (width*height - np.count_nonzero(img)) / (0.8*width*height)
+    avg_num_black_px = (width*height - np.count_nonzero(img)) / (width*height)
+    print("Num black pxs:", width*height - np.count_nonzero(img), "avg:", avg_num_black_px)
+    threshold = avg_num_black_px / 0.8
 
     while True:
         change = False
         new_p0 = (max(0, p0[0]-10), p0[1])
         new_p1 = (max(0, p1[0]-10), p1[1])
         if new_p0 != p0 or new_p1 != p1:
-            delta_score = calc_density_score(img, [new_p0, new_p1, p1, p0])
+            delta_score = calc_black_density(img, [new_p0, new_p1, p1, p0])
             if delta_score < threshold:
                 p0 = new_p0
                 p1 = new_p1
@@ -73,7 +90,7 @@ def maximize_density(img):
         new_p2 = (min(width-1, p2[0]+10), p2[1])
         new_p3 = (min(width-1, p3[0]+10), p3[1])
         if new_p2 != p2 or new_p3 != p3:
-            delta_score = calc_density_score(img, [p2, p3, new_p3, new_p2])
+            delta_score = calc_black_density(img, [p2, p3, new_p3, new_p2])
             if delta_score < threshold:
                 p2 = new_p2
                 p3 = new_p3
@@ -87,7 +104,7 @@ def maximize_density(img):
         new_p0 = (p0[0], max(0, p0[1]-10))
         new_p3 = (p3[0], max(0, p3[1]-10))
         if new_p0 != p0 or new_p3 != p3:
-            delta_score = calc_density_score(img, [new_p0, p0, p3, new_p3])
+            delta_score = calc_black_density(img, [new_p0, p0, p3, new_p3])
             if delta_score < threshold:
                 p0 = new_p0
                 p3 = new_p3
@@ -96,7 +113,7 @@ def maximize_density(img):
         new_p1 = (p1[0], min(height-1, p1[1]+10))
         new_p2 = (p2[0], min(height-1, p2[1]+10))
         if new_p1 != p1 or new_p2 != p2:
-            delta_score = calc_density_score(img, [p1, new_p1, new_p2, p2])
+            delta_score = calc_black_density(img, [p1, new_p1, new_p2, p2])
             if delta_score < threshold:
                 p1 = new_p1
                 p2 = new_p2
@@ -105,7 +122,7 @@ def maximize_density(img):
         if not change:
             break
 
-
+    return [p0, p1, p2, p3]
     cur_score = calc_density_score(img, [p0, p1, p2, p3])
     print(cur_score)
     rate = 2**6
@@ -330,9 +347,93 @@ def detect_playing_field(img):
 
     dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
     g_b = cv2.dilate(g_b, dilationElement, iterations=1)
-    g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=5)
+    g_b = cv2.erode(g_b, erosionElement, iterations=12)
 
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    g_b = cv2.GaussianBlur(g_b, (25, 25), 0)
+
+    g_b = cv2.adaptiveThreshold(g_b, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 73, 1)
+    g_b = cv2.dilate(g_b, dilationElement, iterations=10)
+    # g_b = cv2.dilate(g_b, dilationElement, iterations=10)
+    # g_b = cv2.dilate(g_b, dilationElement, iterations=10)
+    # cv2.imshow("g_b", img)
+    # cv2.waitKey(0)
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    middle = (int(img.shape[1] / 2), int(img.shape[1] / 2))
+    result = cv2.floodFill(g_b, None, middle, 120)
+    print(result)
+    _, g_b, _, _ = result
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+
+    g_b[np.where(g_b != 120)] = 0
+    g_b[np.where(g_b != 0)] = 255
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+
+    erosionSize = 7
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    g_b = cv2.dilate(g_b, dilationElement, iterations=10)
+    g_b = cv2.erode(g_b, erosionElement, iterations=10)
+    erosionSize = 17
+    # dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    # erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    # g_b = cv2.erode(g_b, erosionElement, iterations=10)
+    # g_b = cv2.dilate(g_b, dilationElement, iterations=10)
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    erosionSize = 17
+    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    erosionElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosionSize, erosionSize))
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+    # g_b = cv2.erode(g_b, erosionElement, iterations=12)
+    # g_b = cv2.dilate(g_b, dilationElement, iterations=12)
+
+    # cv2.imshow("g_b", g_b)
+    # cv2.waitKey(0)
+
+    im2, contours, hierarchy = cv2.findContours(g_b, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.destroyAllWindows()
+
+    polygon = cv2.approxPolyDP(contours[0], 50, True)
+    polygon = cv2.approxPolyDP(polygon, 100, True)
+    convexHull = cv2.convexHull(polygon)
+
+    g_b[:,:] = 0
+    g_b = cv2.fillConvexPoly(g_b, convexHull, color=255)
+    playing_field = img.copy()
+
+    for idx in range(len(convexHull)):
+        pt1 = convexHull[idx][0]
+        pt2 = convexHull[(idx+1)%len(convexHull)][0]
+        pt1 = (pt1[0], pt1[1])
+        pt2 = (pt2[0], pt2[1])
+        cv2.line(img, pt1, pt2, (0,0,255), 3)
+
+    # cv2.imshow("playing_field", img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # Use g_b as a "mask" for img (I couldn't figure out the proper way to use it as a mask)
+    for i in (0, 1, 2):
+        playing_field[:,:,i] = np.minimum(g_b, playing_field[:,:,i])
+
+    return playing_field
     # g_b = cv2.convertScaleAbs(g_b)
     # cv2.imshow("g_b", g_b)
     # cv2.waitKey(0)
@@ -427,7 +528,7 @@ def detection_method(img):
     cv2.waitKey(0)
 
 
-def show_keypoints(img):
+def show_keypoints(playing_field):
     # works well
     # surf = cv.xfeatures2d.SURF_create(700)
     # img = cv.GaussianBlur(img, (17, 17), 0)
@@ -476,9 +577,9 @@ def show_keypoints(img):
     # cv2.destroyAllWindows()
     # return
     surf = cv2.xfeatures2d.SURF_create(2500)
-    blurred = img
+    blurred = playing_field
 
-    LAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    LAB = cv2.cvtColor(playing_field, cv2.COLOR_BGR2LAB)
     L = LAB[:,:,0]
     A = LAB[:,:,1]
     B = LAB[:,:,2]
@@ -489,7 +590,7 @@ def show_keypoints(img):
     #cv2.imshow("B", B)
     #cv2.waitKey(0)
 
-    HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    HSV = cv2.cvtColor(playing_field, cv2.COLOR_BGR2HSV)
     H = HSV[:,:,0]
     S = HSV[:,:,1]
     V = HSV[:,:,2]
@@ -500,7 +601,7 @@ def show_keypoints(img):
     #cv2.imshow("V", V)
     #cv2.waitKey(0)
 
-    YCrCb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    YCrCb = cv2.cvtColor(playing_field, cv2.COLOR_BGR2YCrCb)
     Y = YCrCb[:,:,0]
     Cr = YCrCb[:,:,1]
     Cv = YCrCb[:,:,2]
@@ -575,14 +676,14 @@ def show_keypoints(img):
     best_light = [(None, float("INF"))] * 10
     for keypoint in kpDark:
         y,x = int(keypoint.pt[0]), int(keypoint.pt[1])
-        this = sum_of_squared_gradients(img[y-window_size:y+window_size+1, x-window_size:x+window_size+1])
+        this = sum_of_squared_gradients(playing_field[y - window_size:y + window_size + 1, x - window_size:x + window_size + 1])
         if this < best_dark[-1][1]:
             best_dark[-1] = (keypoint, this)
             best_dark.sort(key=lambda x: x[1])
 
     for keypoint in kpLight:
         y,x = int(keypoint.pt[0]), int(keypoint.pt[1])
-        this = sum_of_squared_gradients(img[y-window_size:y+window_size+1, x-window_size:x+window_size+1])
+        this = sum_of_squared_gradients(playing_field[y - window_size:y + window_size + 1, x - window_size:x + window_size + 1])
         if this < best_dark[-1][1]:
             best_light[-1] = (keypoint, this)
             best_light.sort(key=lambda x: x[1])
@@ -592,10 +693,30 @@ def show_keypoints(img):
     best_kp = [i[0] for i in best_dark if i[0] is not None]
     best_kp += [i[0] for i in best_light if i[0] is not None]
 
-    keypointsImg = img.copy()
-    cv2.drawKeypoints(img, kpDark, keypointsImg, color=[0, 0, 255])
+    keypointsImg = playing_field.copy()
+    cv2.drawKeypoints(playing_field, kpDark, keypointsImg, color=[0, 0, 255])
     cv2.drawKeypoints(keypointsImg, kpLight, keypointsImg, color=[255, 0, 0])
     cv2.drawKeypoints(keypointsImg, best_kp, keypointsImg, color=[0, 255, 0])
+
+    from test import minimize_sum_of_squared_gradients
+
+    ball_matches = []
+    tot = 0
+    for kp in best_kp:
+        kp_x = kp.pt[0]
+        kp_y = kp.pt[1]
+        search_radius = 18
+        possible_ball = playing_field[kp_y-search_radius:kp_y+search_radius,kp_x-search_radius:kp_x+search_radius]
+        score, radius, x, y = minimize_sum_of_squared_gradients(possible_ball)
+        ball_matches.append((score, radius, x, y, kp_x, kp_y))
+        tot += score
+
+    avg = tot / len(ball_matches)
+    # Only keep scores that are better than or equal to x*avg
+    ball_matches = [i for i in ball_matches if i[0] - avg < 0.3*avg]
+
+    for score, radius, x, y, kp_x, kp_y in ball_matches:
+        cv2.circle(keypointsImg, (int(kp_x-search_radius+x), int(kp_y-search_radius+y)), radius, [255,0,0])
 
     cv2.imshow("Keypoints", keypointsImg)
     cv2.waitKey(0)
@@ -615,4 +736,5 @@ if __name__ == "__main__":
             # img = cv2.imread("images/800x600/" + filename)
             # img = cv2.imread("images/3840x2160/" + filename)
             # showKeypoints(img)
-            detect_playing_field(img)
+            playing_field = detect_playing_field(img)
+            show_keypoints(playing_field)
