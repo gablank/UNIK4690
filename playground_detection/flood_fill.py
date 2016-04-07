@@ -53,13 +53,13 @@ def detect(img):
         import math
         line_1 = (p1[1]-c[1],p1[0]-c[0],0)
         line_2 = (p2[1]-c[1],p2[0]-c[0],0)
-        return angle_between(line_1, line_2) * 180 / math.pi
+        return abs_angle_between(line_1, line_2) * 180 / math.pi
 
     def unit_vector(vector):
         """ Returns the unit vector of the vector.  """
         return vector / np.linalg.norm(vector)
 
-    def angle_between(v1, v2):
+    def abs_angle_between(v1, v2):
         """ Returns the angle in radians between vectors 'v1' and 'v2'::
 
                 >>> angle_between((1, 0, 0), (0, 1, 0))
