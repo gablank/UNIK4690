@@ -87,5 +87,5 @@ if __name__ == "__main__":
                 # img = cv2.imread("images/3840x2160/" + filename)
                 # showKeypoints(img)
                 playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
-                cv2.waitKey(0)
+                #cv2.waitKey(0)
                 #ball_detection.show_keypoints(playing_field)

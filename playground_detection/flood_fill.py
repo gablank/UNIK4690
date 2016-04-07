@@ -46,6 +46,37 @@ def detect(img):
 
         img[np.where(img < 255)] = 0
 
+    def get_angle(p1, c, p2):
+        """
+        Get the angle between the lines c -> p1 and c -> p2
+        """
+        import math
+        line_1 = (p1[1]-c[1],p1[0]-c[0],0)
+        line_2 = (p2[1]-c[1],p2[0]-c[0],0)
+        return angle_between(line_1, line_2) * 180 / math.pi
+
+    def unit_vector(vector):
+        """ Returns the unit vector of the vector.  """
+        return vector / np.linalg.norm(vector)
+
+    def angle_between(v1, v2):
+        """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+                >>> angle_between((1, 0, 0), (0, 1, 0))
+                1.5707963267948966
+                >>> angle_between((1, 0, 0), (1, 0, 0))
+                0.0
+                >>> angle_between((1, 0, 0), (-1, 0, 0))
+                3.141592653589793
+        """
+        v1_u = unit_vector(v1)
+        v2_u = unit_vector(v2)
+        angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+        import math
+        while angle >= math.pi/2:
+            angle -= math.pi
+        return abs(angle)
+
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(float)
 
@@ -91,6 +122,10 @@ def detect(img):
     for i in range(1, len(contours)):
         polygon = np.concatenate((polygon, contours[i]))
 
+    #for point in polygon:
+    #    print(point)
+    #return
+
     #polygon = np.where(hue == 255)
     #zipped = []
     #print(contours[0])
@@ -100,14 +135,22 @@ def detect(img):
 
     #polygon = np.array(zipped)
     #print(polygon)
-    # polygon = cv2.approxPolyDP(contours[0], 20, True)
-    # polygon = cv2.approxPolyDP(polygon, 100, True)
+    #polygon = cv2.approxPolyDP(polygon, 100, True)
 
     # return polygon
-    return cv2.convexHull(polygon)
+    convex_hull = cv2.convexHull(polygon)
 
-    _show(hue)
-    return
+    #print("Before:", len(convex_hull))
+    convex_hull = cv2.approxPolyDP(convex_hull, 10, True)
+    #print("After:", len(convex_hull))
+
+    new_convex_hull = []
+    for i in range(len(convex_hull)):
+        if get_angle(convex_hull[(i-1)%len(convex_hull)][0], convex_hull[i][0], convex_hull[(i+1)%len(convex_hull)][0]) > 15:
+            new_convex_hull.append(convex_hull[i])
+    convex_hull = np.array(new_convex_hull)
+    #print(convex_hull)
+    return convex_hull
 
 
     ret, hue = cv2.threshold(hue, 10, 255, cv2.THRESH_BINARY)
