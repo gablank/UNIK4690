@@ -12,7 +12,9 @@ def detect(img, method="flood_fill", draw_field=False):
     elif method == "maximize_density":
         polygon = maximize_density.detect(img)
 
-    # return img
+    if polygon is None:
+        return img
+
     g_b = img[:,:,0].copy()
     g_b[:,:] = 0
     g_b = cv2.fillConvexPoly(g_b, polygon, color=255)
@@ -31,7 +33,9 @@ def detect(img, method="flood_fill", draw_field=False):
                 pt2 = (pt2[0], pt2[1])
             cv2.line(img, pt1, pt2, (0,0,255), 3)
 
-        cv2.imshow("Playing field", img)
+        cv2.namedWindow("test", cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("test", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("test", img)
         cv2.waitKey(int(1000/30))
         # cv2.destroyAllWindows()
 
@@ -39,4 +43,7 @@ def detect(img, method="flood_fill", draw_field=False):
     for i in (0, 1, 2):
         playing_field[:,:,i] = np.minimum(g_b, playing_field[:,:,i])
 
+
+    #cv2.imshow("Playing field", playing_field)
+    #cv2.waitKey(0)
     return playing_field
