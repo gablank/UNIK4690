@@ -15,7 +15,7 @@ def detection_method(img):
 
 
 if __name__ == "__main__":
-    read_from_camera = True
+    read_from_camera = False
 
     if read_from_camera:
         cap = cv2.VideoCapture(0)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
            img = cv2.imread("images/microsoft_cam/video/" + str(i) + ".jpg")
 
            playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
-           cv2.waitKey(16)
+           cv2.waitKey(30)
         exit(0)
 
         filenames = []
