@@ -90,6 +90,65 @@ def draw_convex_hull(img, convex_hull):
         cv2.line(copy, pt1, pt2, color, 3)
     return copy
 
+def poly2mask(poly, size_or_img):
+    size = size_or_img if type(size_or_img) != np.ndarray else size_or_img.shape[0:2]
+    mask = np.zeros(size, dtype=np.uint8)
+    if type(poly) == list:
+        poly = np.array(poly)
+    cv2.fillPoly(mask, [poly], 255)
+    return mask
+
+
+def wait_for_key(char):
+    while(True):
+        key = cv2.waitKey()
+        # http://stackoverflow.com/a/17284668/1517969
+        if (key % 256) == ord('s'):
+            break
+
+def select_polygon(orig_img):
+    """
+    Interactively select a polygon. Add points with LB and finish with key "s"
+    """
+    polygon = []
+    color = (0,0,255)
+    def mouse_callback(ev, x, y, flags, param):
+        img = orig_img.copy()
+
+        if ev == cv2.EVENT_LBUTTONDOWN:
+            polygon.append((x,y))
+
+        for p1,p2 in zip(polygon, polygon[1:]):
+            cv2.line(img, p1, p2, color, 2)
+
+        if len(polygon) > 0:
+            cv2.circle(img, polygon[0], 4, color)
+            cv2.line(img, polygon[-1], (x,y), color, 1)
+
+        if len(polygon) > 1:
+            cv2.line(img, (x,y), polygon[0], color, 1)
+
+        cv2.imshow("polygon-select", img)
+
+    cv2.namedWindow("polygon-select")
+    cv2.setMouseCallback("polygon-select", mouse_callback)
+    cv2.imshow("polygon-select", orig_img)
+    wait_for_key("s")
+    cv2.destroyWindow("polygon-select")
+    return polygon
+
+from matplotlib import pyplot as plt
+def plot_histogram(img, channels=[0], mask=None, color="b", max=None):
+    """
+    Adds the histogram to the active matplotlib plot. Use plt.show() after to show the plot.
+    """
+    max = np.max(img)+0.00001 if max is None else max
+    for ch in channels:
+        hist = cv2.calcHist([img], [ch], mask, [256], [0, max])
+        hist = hist/sum(hist) # normalize so each bucket represents percentage of total pixels
+        plt.plot(hist, color)
+
+
 if __name__ == "__main__":
     # 90
     print(get_angle((0,100), (0,0), (100,0)))
