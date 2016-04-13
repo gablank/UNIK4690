@@ -23,7 +23,7 @@ def mean_diff(img, mask1, mask2):
     diff = abs(mean_background - mean_playground)
     return diff
 
-def abs_diff(img, mask, mask_pixel_count):
+def abs_deviation(img, mask, mask_pixel_count):
     mean = cv2.mean(img, mask)[0]
     diff = cv2.absdiff(img, mean)
     return cv2.sumElems(apply_mask(diff, mask))[0] / mask_pixel_count
@@ -37,21 +37,21 @@ def create_img_set_fitness_function(img_paths, mask):
     mask_pixel_count = cv2.countNonZero(mask)
 
     def fitness(transformer, parm):
-        diff_sum = 0
+        fitness_sum = 0
         for img_bgr in images:
             img = transformer(img_bgr, parm)
-            # diff = mean_diff(img, mask, complement_mask)
-            diff = abs_diff(img, mask, mask_pixel_count)
-            diff_sum += diff
+            diff = mean_diff(img, mask, complement_mask)
+            inv_dev = 1-abs_deviation(img, mask, mask_pixel_count)
+            fitness_sum += diff+inv_dev/2
             # img = img.copy()
-            # cv2.putText(img, str(parm) + " " + str(diff), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
+            # cv2.putText(img, str(parm) + " " + str(diff)[:4] + ", " + str(inv_dev), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
             # print(diff)
             # cv2.imshow("test", img)
             # utilities.wait_for_key('n')
 
-        return diff_sum / len(images)
+        return (fitness_sum / len(images))
 
-    return 1.0-fitness
+    return fitness
 
 def create_fitness_function_v1(dir_path):
     img_names = ["2016-04-12_16:19:04.png", "2016-04-12_17:46:03.png", "2016-04-12_18:20:04.png", "2016-04-12_19:04:04.png",
@@ -88,4 +88,4 @@ if __name__ == "__main__":
     print(fitness(hsv_single_transformer, 1))
     print(fitness(hsv_single_transformer, 2))
     end = timer()
-    print((end-start)/3*1000)
+    print((end-start)/6*1000)
