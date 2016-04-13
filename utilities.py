@@ -55,7 +55,7 @@ def get_angle(p1, c, p2):
     return angle_radians * 180 / math.pi
 
 
-def flood_fill_until(img, limit, center=None, color=255, max_diff=25):
+def flood_fill_until(img, limit, center=None, color=255, max_diff=100):
     """
     Increase the loDiff and upDiff incrementally until limit of the pixels in the image has been filled
     """
@@ -66,7 +66,7 @@ def flood_fill_until(img, limit, center=None, color=255, max_diff=25):
     diff = 0
     num_filled = 0
     mask_shape = (img.shape[0]+2, img.shape[1]+2)
-    while num_filled < limit*img.size and diff < max_diff:
+    while num_filled < limit*img.size:# and diff < max_diff:
         mask = np.zeros(mask_shape).astype(np.uint8)
         num_filled, _, _, _ = cv2.floodFill(img, mask, seed, color, upDiff=diff, loDiff=diff, flags=cv2.FLOODFILL_FIXED_RANGE | cv2.FLOODFILL_MASK_ONLY | (color << 8))
         diff += 1
