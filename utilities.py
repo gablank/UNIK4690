@@ -101,11 +101,11 @@ def poly2mask(poly, size_or_img):
     return mask
 
 
-def wait_for_key(char):
+def wait_for_key(char='n'):
     while(True):
         key = cv2.waitKey()
         # http://stackoverflow.com/a/17284668/1517969
-        if (key % 256) == ord('s'):
+        if (key % 256) == ord(char):
             break
 
 def select_polygon(orig_img):
@@ -135,7 +135,7 @@ def select_polygon(orig_img):
     cv2.namedWindow("polygon-select")
     cv2.setMouseCallback("polygon-select", mouse_callback)
     cv2.imshow("polygon-select", orig_img)
-    wait_for_key("s")
+    wait_for_key('s')
     cv2.destroyWindow("polygon-select")
     return polygon
 
