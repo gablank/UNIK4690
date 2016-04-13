@@ -65,11 +65,23 @@ if __name__ == "__main__":
                 _, _ = cap.read()
 
     else:
-        for i in range(385):
-           img = cv2.imread("images/microsoft_cam/video/" + str(i) + ".jpg")
+        for cur in walk("images/microsoft_cam/24h/south/"):
+            filenames = cur[2]
+            break
+        print(filenames)
 
-           playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
-           cv2.waitKey(30)
+        filenames.sort()
+
+        for file in filenames:
+            img = cv2.imread("images/microsoft_cam/24h/south/" + file)
+            cv2.putText(img, file, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255))
+            #img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:,:,2]
+            #img = img / np.amax(img)
+            #cv2.imshow("test", img)
+            #cv2.waitKey(30)
+            playground_detection.detect(img, "flood_fill", draw_field=True)
+           #playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
+           #cv2.waitKey(30)
         exit(0)
 
         filenames = []
