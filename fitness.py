@@ -23,17 +23,25 @@ def mean_diff(img, mask1, mask2):
     diff = abs(mean_background - mean_playground)
     return diff
 
+def abs_diff(img, mask, mask_pixel_count):
+    mean = cv2.mean(img, mask)[0]
+    diff = cv2.absdiff(img, mean)
+    return cv2.sumElems(apply_mask(diff, mask))[0] / mask_pixel_count
+
 def create_img_set_fitness_function(img_paths, mask):
     complement_mask = cv2.bitwise_not(mask)
     images = []
     for img_path in img_paths:
         images.append(cv2.imread(img_path))
 
+    mask_pixel_count = cv2.countNonZero(mask)
+
     def fitness(transformer, parm):
         diff_sum = 0
         for img_bgr in images:
             img = transformer(img_bgr, parm)
-            diff = mean_diff(img, mask, complement_mask)
+            # diff = mean_diff(img, mask, complement_mask)
+            diff = abs_diff(img, mask, mask_pixel_count)
             diff_sum += diff
             # img = img.copy()
             # cv2.putText(img, str(parm) + " " + str(diff), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
@@ -43,7 +51,7 @@ def create_img_set_fitness_function(img_paths, mask):
 
         return diff_sum / len(images)
 
-    return fitness
+    return 1.0-fitness
 
 def create_fitness_function_v1(dir_path):
     img_names = ["2016-04-12_16:19:04.png", "2016-04-12_17:46:03.png", "2016-04-12_18:20:04.png", "2016-04-12_19:04:04.png",
@@ -54,15 +62,19 @@ def create_fitness_function_v1(dir_path):
 
     return create_img_set_fitness_function(img_paths, mask)
 
+def convert_to_float(img):
+    img = img.astype(np.float32)
+    return img / np.max(img)
+
 if __name__ == "__main__":
     fitness = create_fitness_function_v1("images/series-1")
 
     def rgb_single_transformer(img, channel):
-        return img[:,:,channel]
+        return convert_to_float(img[:,:,channel])
 
     def hsv_single_transformer(img, channel):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        return img[:,:,channel]
+        return convert_to_float(img[:,:,channel])
 
     from timeit import default_timer as timer
     # fitness(rgb_single_transformer, 0)
