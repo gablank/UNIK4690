@@ -4,6 +4,7 @@ import numpy as np
 import math
 import json
 import os
+import time
 
 
 def get_middle(img):
@@ -176,6 +177,18 @@ def update_metadata(img_path, new_meta_data):
     with open(metadata_path, "w") as fp:
         json.dump(meta_dict, fp)
     return meta_dict
+
+
+class Timer:
+    def __init__(self):
+        self.start = time.time()
+
+    def reset(self):
+        self.start = time.time()
+
+    def __str__(self):
+        return str(round(time.time() - self.start, 3)) + "s"
+
 
 if __name__ == "__main__":
     # 90
