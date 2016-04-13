@@ -23,10 +23,17 @@ def mean_diff(img, mask1, mask2):
     diff = abs(mean_background - mean_playground)
     return diff
 
+def deviation(img, mask, mask_pixel_count):
+    mean, std_dev = cv2.meanStdDev(img, mask=mask)
+    return std_dev[0][0]
+
 def abs_deviation(img, mask, mask_pixel_count):
     mean = cv2.mean(img, mask)[0]
     diff = cv2.absdiff(img, mean)
     return cv2.sumElems(apply_mask(diff, mask))[0] / mask_pixel_count
+
+# def histogram_diff(img, mask, complement_mask):
+#     hist = cv2.calcHist([img], [0], mask, [256], [0, 1.0])
 
 def create_img_set_fitness_function(img_paths, mask):
     complement_mask = cv2.bitwise_not(mask)
@@ -41,10 +48,11 @@ def create_img_set_fitness_function(img_paths, mask):
         for img_bgr in images:
             img = transformer(img_bgr, parm)
             diff = mean_diff(img, mask, complement_mask)
-            inv_dev = 1-abs_deviation(img, mask, mask_pixel_count)
+            inv_dev = 1-deviation(img, mask, mask_pixel_count)
+            inv_abs_dev = 1-abs_deviation(img, mask, mask_pixel_count)
             fitness_sum += diff+inv_dev/2
             # img = img.copy()
-            # cv2.putText(img, str(parm) + " " + str(diff)[:4] + ", " + str(inv_dev), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
+            # cv2.putText(img, str(parm) + " " + str(diff)[:4] + ", " + str(inv_dev) + ", " + str(inv_abs_dev), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
             # print(diff)
             # cv2.imshow("test", img)
             # utilities.wait_for_key('n')
