@@ -4,10 +4,9 @@ import playground_detection
 import ball_detection
 import numpy as np
 import cv2
-from os import walk
 import utilities
-import os
-import json
+from utilities import read_metadata
+from utilities import update_metadata
 
 from matplotlib import pyplot as plt
 
@@ -15,33 +14,12 @@ from matplotlib import pyplot as plt
 #     return cv2.imread("images/microsoft_cam/raw/" + filename)
 
 
-def get_metadata_path(img_path):
-    img_name = os.path.basename(img_path)
-    img_base = "".join(img_name.split(".")[:-1])
-    return os.path.join(os.path.dirname(img_path), img_base+".json")
-
-def read_metadata(img_path):
-    metadata_path = get_metadata_path(img_path)
-    if os.path.exists(metadata_path):
-        with open(metadata_path) as fp:
-            meta_dict = json.load(fp)
-            return meta_dict
-    else:
-        return {}
-
-def update_metadata(img_path, new_meta_data):
-    meta_dict = read_metadata(img_path)
-    meta_dict.update(new_meta_data)
-    metadata_path = get_metadata_path(img_path)
-    with open(metadata_path, "w") as fp:
-        json.dump(meta_dict, fp)
-    return meta_dict
 
 def apply_mask(img, mask):
     return cv2.bitwise_and(img, img, mask=mask)
 
 if __name__ == "__main__":
-    img_path = "images/microsoft_cam/raw/2.jpg"
+    img_path = "images/series-1/latest.png"
     img = cv2.imread(img_path)
     meta = read_metadata(img_path)
 
@@ -58,6 +36,7 @@ if __name__ == "__main__":
     hue = hsv[:,:,0]
 
     utilities.show(hue)
+    utilities.show(playground_mask)
 
     plt.figure(1)
     plt.subplot(3,1,1)

@@ -2,6 +2,8 @@
 import cv2
 import numpy as np
 import math
+import json
+import os
 
 
 def get_middle(img):
@@ -148,6 +150,32 @@ def plot_histogram(img, channels=[0], mask=None, color="b", max=None):
         hist = hist/sum(hist) # normalize so each bucket represents percentage of total pixels
         plt.plot(hist, color)
 
+def get_metadata_path(img_path):
+    img_name = os.path.basename(img_path)
+    img_base = "".join(img_name.split(".")[:-1])
+    img_dir = os.path.dirname(img_path)
+    series_metadata_path = os.path.join(img_dir, "metadata.json")
+    if os.path.exists(series_metadata_path):
+        return series_metadata_path
+    else:
+        return os.path.join(img_dir, img_base+".json")
+
+def read_metadata(img_path):
+    metadata_path = get_metadata_path(img_path)
+    if os.path.exists(metadata_path):
+        with open(metadata_path) as fp:
+            meta_dict = json.load(fp)
+            return meta_dict
+    else:
+        return {}
+
+def update_metadata(img_path, new_meta_data):
+    meta_dict = read_metadata(img_path)
+    meta_dict.update(new_meta_data)
+    metadata_path = get_metadata_path(img_path)
+    with open(metadata_path, "w") as fp:
+        json.dump(meta_dict, fp)
+    return meta_dict
 
 if __name__ == "__main__":
     # 90
