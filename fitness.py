@@ -1,9 +1,15 @@
+import collections
+import math
 import numpy as np
 import cv2
 import utilities
 import os
 from utilities import read_metadata
 from utilities import update_metadata
+
+def extract_bb(img, bb):
+    x,y,w,h = bb
+    return img[y:y+h, x:x+w]
 
 def apply_mask(img, mask):
     return cv2.bitwise_and(img, img, mask=mask)
@@ -17,47 +23,90 @@ def get_playground_mask(img_path):
     playground_mask = utilities.poly2mask(meta["playground_poly"], img)
     return playground_mask
 
-def mean_diff(img, mask1, mask2):
-    mean_playground = cv2.mean(img, mask1)[0]
-    mean_background = cv2.mean(img, mask2)[0]
+def mean_diff(img, params):
+    mean_playground = cv2.mean(img, params.fg_mask)[0]
+    mean_background = cv2.mean(img, params.bg_mask)[0]
     diff = abs(mean_background - mean_playground)
     return diff
 
-def deviation(img, mask, mask_pixel_count):
-    mean, std_dev = cv2.meanStdDev(img, mask=mask)
+def deviation(img, params):
+    mean, std_dev = cv2.meanStdDev(img, mask=params.fg_mask)
     return std_dev[0][0]
 
-def abs_deviation(img, mask, mask_pixel_count):
-    mean = cv2.mean(img, mask)[0]
+def abs_deviation(img, params):
+    mean = cv2.mean(img, params.fg_mask)[0]
     diff = cv2.absdiff(img, mean)
-    return cv2.sumElems(apply_mask(diff, mask))[0] / mask_pixel_count
+    return cv2.sumElems(apply_mask(diff, params.fg_mask))[0] / params.fg_pixel_count
 
-# def histogram_diff(img, mask, complement_mask):
-#     hist = cv2.calcHist([img], [0], mask, [256], [0, 1.0])
+def histogram_compare(img, params):
+    resolution = 100
+    h1 = cv2.calcHist([img], [0], params.fg_mask, [resolution], [0, 1.0])
+    h2 = cv2.calcHist([img], [0], params.bg_mask, [resolution], [0, 1.0])
+    cv2.normalize(h1, h1, alpha=1, norm_type=1)
+    cv2.normalize(h2, h2, alpha=1, norm_type=1)
+    return cv2.compareHist(h1, h2, 0)
+    # Similarity
+    # cv2.normalize(h1, h1, alpha=1, norm_type=2)
+    # cv2.normalize(h2, h2, alpha=1, norm_type=2)
+    # return h1.reshape((resolution)).dot(h2.reshape((resolution)))
 
-def create_img_set_fitness_function(img_paths, mask):
-    complement_mask = cv2.bitwise_not(mask)
+def discriminatory_power(img, params):
+    """
+    Taken from "Autonomous Robotic Vehicle Road Following, 1988"
+    """
+    mean1, std_dev1 = cv2.meanStdDev(extract_bb(img, params.fg_bb), mask=params.fg_mask_bb)
+    mean2, std_dev2 = cv2.meanStdDev(img, mask=params.bg_mask)
+    # Return format is a bit weird ...
+    var1 = std_dev1[0][0]**2
+    var2 = std_dev2[0][0]**2
+    mean1 = mean1[0][0]
+    mean2 = mean2[0][0]
+    return (mean1 - mean2)**2 / (var1**2 + var2**2)
+
+def create_img_set_fitness_function(img_paths, fg_mask):
     images = []
     for img_path in img_paths:
-        images.append(cv2.imread(img_path))
+        bgr = cv2.imread(img_path)
+        bgr = bgr.astype(np.float32)
+        bgr /= 255
 
-    mask_pixel_count = cv2.countNonZero(mask)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+        ycrcb = cv2.cvtColor(bgr, cv2.COLOR_BGR2YCrCb)
+        images.append((bgr, hsv, lab, ycrcb))
+
+    N = len(images)
+
+    bg_mask = cv2.bitwise_not(fg_mask)
+    fg_pixel_count = cv2.countNonZero(fg_mask)
+    fg_bb = cv2.boundingRect(fg_mask)
+    fg_mask_bb = extract_bb(fg_mask, fg_bb)
+
+    # Parameters that might be relevant to fitness metrics
+    Params = collections.namedtuple("Params", ("fg_mask", "bg_mask", "fg_bb", "fg_mask_bb", "fg_pixel_count"))
+    params = Params(fg_mask, bg_mask, fg_bb, fg_mask_bb, fg_pixel_count)
+
+    timer = utilities.Timer()
 
     def fitness(transformer, parm):
+        timer.reset()
         fitness_sum = 0
-        for img_bgr in images:
-            img = transformer(img_bgr, parm)
-            diff = mean_diff(img, mask, complement_mask)
-            inv_dev = 1-deviation(img, mask, mask_pixel_count)
-            inv_abs_dev = 1-abs_deviation(img, mask, mask_pixel_count)
-            fitness_sum += diff+inv_dev/2
+        for img in images:
+            img = transformer(img, parm)
+            # diff = mean_diff(img, mask, bg_mask)
+            # inv_dev = 1-deviation(img, mask, fg_pixel_count)
+            # inv_abs_dev = 1-abs_deviation(img, mask, fg_pixel_count)
+            fitness_value = discriminatory_power(img, params)
+            fitness_sum += fitness_value
+            # fitness_sum += diff+inv_dev/2
             # img = img.copy()
             # cv2.putText(img, str(parm) + " " + str(diff)[:4] + ", " + str(inv_dev) + ", " + str(inv_abs_dev), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
-            # print(diff)
+            # cv2.putText(img, str(fitness_value), (100,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255), 2)
             # cv2.imshow("test", img)
             # utilities.wait_for_key('n')
 
-        return (fitness_sum / len(images))
+        # print(timer)
+        return (fitness_sum / N)
 
     return fitness
 
@@ -75,17 +124,15 @@ def convert_to_float(img):
     return img / np.max(img)
 
 if __name__ == "__main__":
-    fitness = create_fitness_function_v1("images/series-1")
+    fitness = create_fitness_function_v1("images/microsoft_cam/24h/south")
 
     def rgb_single_transformer(img, channel):
-        return convert_to_float(img[:,:,channel])
+        return img[0][:,:,channel]
 
     def hsv_single_transformer(img, channel):
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        return convert_to_float(img[:,:,channel])
+        return img[1][:,:,channel]
 
     from timeit import default_timer as timer
-    # fitness(rgb_single_transformer, 0)
 
     start = timer()
     print(fitness(rgb_single_transformer, 0))

@@ -4,6 +4,9 @@ import numpy as np
 import cv2
 
 
+root_path = "/home/anders/UNIK4690/project/"
+# root_path = ""
+
 class EvoAlg:
     def __init__(self, mutation_rate, mu, sigma, transform_image, population_size, individual_size, fitness_func,
                  parent_selection_pressure, to_be_killed_selection_pressure):
@@ -107,11 +110,11 @@ class EvoAlg:
 
 if __name__ == "__main__":
 
-    def transform_image(img, vec):
+    def transform_image(img_spaces, vec):
         #from timeit import default_timer as timer
         #start = timer()
-        img = img.astype(np.float32)
-        img /= 255
+
+        img, hsv, lab, ycrcb = img_spaces
 
         transformed = np.zeros(img.shape[:2])
         if True:
@@ -124,7 +127,6 @@ if __name__ == "__main__":
             transformed += vec[idx] * r
             idx += 1
 
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
             h, s, v = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
             transformed += vec[idx] * h
             idx += 1
@@ -133,7 +135,6 @@ if __name__ == "__main__":
             transformed += vec[idx] * v
             idx += 1
 
-            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
             l, a, b = lab[:,:,0], lab[:,:,1], lab[:,:,2]
             transformed += vec[idx] * l
             idx += 1
@@ -142,7 +143,6 @@ if __name__ == "__main__":
             transformed += vec[idx] * b
             idx += 1
 
-            ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
             y, cr, cb = ycrcb[:,:,0], ycrcb[:,:,1], ycrcb[:,:,2]
             transformed += vec[idx] * y
             idx += 1
@@ -193,14 +193,14 @@ if __name__ == "__main__":
     #exit(0)
 
     import fitness
-    fitness_func = fitness.create_fitness_function_v1("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/")
+    fitness_func = fitness.create_fitness_function_v1(root_path+"images/microsoft_cam/24h/south/")
     alg = EvoAlg(mutation_rate=1, mu=0, sigma=1, transform_image=transform_image, population_size=20, individual_size=12, fitness_func=fitness_func,
                  parent_selection_pressure=1.0, to_be_killed_selection_pressure=1.0)
     best = alg.run(None)
 
     import os
     filenames = []
-    for cur in os.walk("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/"):
+    for cur in os.walk(root_path+"images/microsoft_cam/24h/south/"):
         filenames = cur[2]
         break
 
@@ -208,9 +208,14 @@ if __name__ == "__main__":
 
     for file in filenames:
         if file[-3:] == 'png':
-            img = cv2.imread("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/" + file)
+            img = cv2.imread(root_path+"images/microsoft_cam/24h/south/" + file)
             cv2.putText(img, file, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255))
-            transformed = transform_image(img, best)
+
+            ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+            transformed = transform_image((img, hsv, lab, ycrcb), best)
             cv2.imshow("test", transformed)
             cv2.waitKey(30)
 
