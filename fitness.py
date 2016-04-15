@@ -61,7 +61,7 @@ def discriminatory_power(img, params):
     var2 = std_dev2[0][0]**2
     mean1 = mean1[0][0]
     mean2 = mean2[0][0]
-    return (mean1 - mean2)**2 / (var1**2 + var2**2)
+    return (mean1 - mean2)**2 / (var1 + var2)
 
 def create_img_set_fitness_function(img_paths, fg_mask):
     images = []
