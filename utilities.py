@@ -32,6 +32,7 @@ def show(img, win_name="test", fullscreen=False, time_ms=0):
         exit(0)
 
     cv2.destroyWindow(win_name)
+    return chr(key%256)
 
 
 def box(img, center, side):
@@ -101,13 +102,16 @@ def poly2mask(poly, size_or_img):
     cv2.fillPoly(mask, [poly], 255)
     return mask
 
-
-def wait_for_key(char='n'):
+def wait_for_key(char=None):
     while(True):
-        key = cv2.waitKey()
+        key_code_raw = cv2.waitKey()
         # http://stackoverflow.com/a/17284668/1517969
-        if (key % 256) == ord(char):
-            break
+        key_code = key_code_raw % 256
+
+        if char is None:
+            return chr(key_code)
+        elif key == ord(char):
+            return chr(key_code)
 
 def select_polygon(orig_img):
     """
