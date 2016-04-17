@@ -157,6 +157,7 @@ threshold_op = lambda threshold_type: Operation("threshold",
 def open(img, kernel_size, iterations):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size,kernel_size))
     img = cv2.erode(img, kernel, iterations=iterations)
+    img = cv2.dilate(img, kernel, iterations=iterations)
     return img
 
 def make_repeated_op(op, n):
