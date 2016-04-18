@@ -68,20 +68,25 @@ if __name__ == "__main__":
         for cur in walk("images/microsoft_cam/24h/south/"):
             filenames = cur[2]
             break
-        print(filenames)
+        #print(filenames)
 
         filenames.sort()
 
         for file in filenames:
-            img = cv2.imread("images/microsoft_cam/24h/south/" + file)
-            cv2.putText(img, file, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255))
-            #img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:,:,2]
-            #img = img / np.amax(img)
-            #cv2.imshow("test", img)
-            #cv2.waitKey(30)
-            playground_detection.detect(img, "flood_fill", draw_field=True)
-           #playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
-           #cv2.waitKey(30)
+            if file[-3:] == 'png':
+                from datetime import datetime
+                date_object = datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+                if date_object > datetime(2016, 4, 12, 19):
+                    continue
+                img = cv2.imread("images/microsoft_cam/24h/south/" + file)
+                cv2.putText(img, file, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255))
+                #img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:,:,2]
+                #img = img / np.amax(img)
+                #cv2.imshow("test", img)
+                #cv2.waitKey(30)
+                playground_detection.detect(img, "flood_fill", draw_field=True)
+               #playing_field = playground_detection.detect(img, "flood_fill", draw_field=True)
+               #cv2.waitKey(30)
         exit(0)
 
         filenames = []
