@@ -5,6 +5,7 @@ import math
 import json
 import os
 import time
+import random
 
 
 def get_middle(img):
@@ -17,7 +18,7 @@ def get_middle(img):
     return (mid_x, mid_y)
 
 
-def show(img, win_name="test", fullscreen=False, time_ms=0):
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False):
     """
     Show img in a window
     """
@@ -25,17 +26,51 @@ def show(img, win_name="test", fullscreen=False, time_ms=0):
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
-    cv2.imshow(win_name, img)
+    to_show = img.copy()
+    to_show = as_uint8(to_show)
+
+    if text is not None:
+        x_pos, y_pos = 20, 30
+        padding = 2
+        font_face = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1
+        thickness = 1
+        text_size, _ = cv2.getTextSize(text, font_face, font_scale, thickness)
+
+        cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
+        cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
+
+    if draw_histograms:
+        n_channels = 0 if len(to_show.shape) < 3 else to_show.shape[2]
+
+        x_pos, y_pos = 10, 50
+        y_padding = 20
+
+        if n_channels == 0:
+            hist = draw_histogram(to_show)
+            to_show[y_pos:y_pos+hist.shape[0], x_pos:x_pos+hist.shape[1]] = hist
+
+        else:
+            for i in range(n_channels):
+                channel = to_show[:,:,i]
+                hist = draw_histogram(channel)
+
+                for j in range(n_channels):
+                    to_show[y_pos:y_pos+hist.shape[0], x_pos:x_pos+hist.shape[1], j] = hist
+
+                y_pos += hist.shape[1] + y_padding
+
+    cv2.imshow(win_name, to_show)
 
     key = cv2.waitKey(time_ms)
     if key % 256 == ord('q'):
         exit(0)
 
-    cv2.destroyWindow(win_name)
+    #cv2.destroyWindow(win_name)
     return chr(key%256)
 
 
-def box(img, center, side):
+def get_box(img, center, side):
     """
     P: (x,y)
     Get a square with side lengths side centered on center
@@ -145,15 +180,42 @@ def select_polygon(orig_img):
     return polygon
 
 from matplotlib import pyplot as plt
-def plot_histogram(img, channels=[0], mask=None, color="b", max=None):
+def plot_histogram(img, channels=[0], mask=None, colors=["b", "g", "r"], max=None):
     """
     Adds the histogram to the active matplotlib plot. Use plt.show() after to show the plot.
     """
     max = np.max(img)+0.00001 if max is None else max
-    for ch in channels:
+    for idx, ch in enumerate(channels):
         hist = cv2.calcHist([img], [ch], mask, [256], [0, max])
         hist = hist/sum(hist) # normalize so each bucket represents percentage of total pixels
-        plt.plot(hist, color)
+        plt.plot(hist, colors[idx])
+
+
+def get_histogram(single_channel_img):
+    single_channel_img = as_uint8(single_channel_img)
+    return cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
+
+
+def draw_histogram(single_channel_img, max_height=256, padding=2):
+    """
+    Get an image of the histogram (to be painted onto other images etc)
+    """
+    single_channel_img = as_uint8(single_channel_img)
+    hist = cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
+
+    hist_img = np.ones((max_height+2*padding, 256 + 2*padding))
+    hist_img = as_uint8(hist_img)
+    hist /= np.amax(hist)
+    hist *= max_height
+
+    for i in range(256):
+        x = i
+        y = int(hist[i][0])
+        pt1 = (padding+x, padding + max_height-y)
+        pt2 = (padding+x, padding + max_height-1)
+
+        cv2.line(hist_img, pt1, pt2, (0, 0, 0))
+    return hist_img
 
 def get_metadata_path(img_path):
     img_name = os.path.basename(img_path)
@@ -183,6 +245,90 @@ def update_metadata(img_path, new_meta_data):
     return meta_dict
 
 
+def transform_image(img_spaces, vec):
+    """
+    Return a list of transformations that have previously worked well
+    The factor for b is always 1
+    :param img_spaces: tuple of image spaces: (bgr, hsv, lab, YCrCb)
+    """
+    bgr, hsv, lab, ycrcb = img_spaces
+
+    transformed = np.zeros(bgr.shape[:2])
+
+    idx = 0
+    b, g, r = bgr[:,:,0], bgr[:,:,1], bgr[:,:,2]
+    # transformed += vec[idx] * b
+    # idx += 1
+    transformed += vec[idx] * g
+    idx += 1
+    transformed += vec[idx] * r
+    idx += 1
+
+    h, s, v = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
+    transformed += vec[idx] * h
+    idx += 1
+    transformed += vec[idx] * s
+    idx += 1
+    transformed += vec[idx] * v
+    idx += 1
+
+    l, a, b = lab[:,:,0], lab[:,:,1], lab[:,:,2]
+    transformed += vec[idx] * l
+    idx += 1
+    transformed += vec[idx] * a
+    idx += 1
+    transformed += vec[idx] * b
+    idx += 1
+
+    y, cr, cb = ycrcb[:,:,0], ycrcb[:,:,1], ycrcb[:,:,2]
+    transformed += vec[idx] * y
+    idx += 1
+    transformed += vec[idx] * cr
+    idx += 1
+    transformed += vec[idx] * cb
+    idx += 1
+
+    # Normalization
+    res = transformed - np.amin(transformed)
+    res /= np.amax(res)
+
+    return as_float32(res)
+
+
+def as_uint8(img):
+    if img.dtype == np.uint8:
+        return img
+
+    if img.dtype not in (np.float32, np.float64):
+        raise RuntimeError("Unknown dtype: {}".format(img.dtype))
+
+    img /= np.amax(img)
+    img *= 255
+    img = np.around(img)
+    return img.astype(np.uint8)
+
+
+def as_float32(img):
+    if img.dtype in (np.float32, np.float64):
+        return img.astype(np.float32) / np.amax(img)
+
+    if img.dtype != np.uint8:
+        raise RuntimeError("Unknown dtype: {}".format(img.dtype))
+
+    img = img.astype(np.float32)
+    return img / 255
+
+
+def astype(img, dtype):
+    if dtype == np.float32:
+        return as_float32(img)
+
+    if dtype == np.uint8:
+        return as_uint8(img)
+
+    raise RuntimeError("Unknown dtype: {}".format(dtype))
+
+
 class Timer:
     def __init__(self):
         self.start = time.time()
@@ -194,7 +340,52 @@ class Timer:
         return str(round(time.time() - self.start, 3)) + "s"
 
 
+def get_project_directory():
+    """
+    Get an absolute path to the projects root directory
+    """
+    cur_dir = os.path.dirname(__file__)
+    while cur_dir != "/" and not os.path.exists(os.path.join(cur_dir, ".git")):
+        cur_dir = os.path.dirname(cur_dir)
+    if not os.path.exists(os.path.join(cur_dir, ".git")):
+        raise FileNotFoundError("Unable to locate project directory!")
+    return cur_dir
+
+
+def locate_file(path):
+    """
+    Attempt to locate the file path in the project.
+    The path may be partial, as in:
+    path = microsoft_cam/24h/south/2016-04-12_19:21:04.png
+    will result in
+    /home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-12_19:21:04.png
+    being returned (on my computer).
+    path = 2016-04-12_19:21:04.png would yield the same result (as no file called 2016-04-12_19:21:04.png exists
+    in any directory below /home/anders/UNIK4690/project/ except for in /home/anders/UNIK4690/project/images/microsoft_cam/24h/south/)
+
+    If there are duplicates, the first encountered by os.walk is returned.
+    """
+    project_dir = get_project_directory()
+    for root, dirs, files in os.walk(project_dir):
+        # Remove directories we know can't contain the image
+        dir_copy = list(dirs)
+        for dir in dir_copy:
+            if dir[0] == "." or dir == "__pycache__":
+                dirs.remove(dir)
+
+        # print("Looking for {} in {}".format(path, root))
+        if os.path.exists(os.path.join(root, path)):
+            path = os.path.join(root, path)
+            break
+    return path
+
+
 if __name__ == "__main__":
+    img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png", "24h/south/2016-04-13_09:03:03.png", "24h/south/2016-04-13_12:45:04.png"]
+    images = list(map(cv2.imread, ["images/microsoft_cam/"+img_path for img_path in img_paths]))
+
+    images = [i for i in images if i is not None]
+
     # 90
     print(get_angle((0,100), (0,0), (100,0)))
 

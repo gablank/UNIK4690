@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # Hue histogram of center box
     box_size = 60
     utilities.plot_histogram(
-        utilities.box(hue, (int(hue.shape[0]/2), int(hue.shape [1]/2)), box_size),
+        utilities.get_box(hue, (int(hue.shape[0] / 2), int(hue.shape [1] / 2)), box_size),
         color="b", max=256)
 
     plt.show()
