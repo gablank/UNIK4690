@@ -69,11 +69,8 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
                 value = range[slider_value]
             op.params[param_name] = value
 
-            import threading
-            def change():
-                run_pipeline(first_change=op)
-                render_results()
-            threading.Thread(target=change).start()
+            run_pipeline(first_change=op)
+            render_results()
         return callback
 
     def render_results():
