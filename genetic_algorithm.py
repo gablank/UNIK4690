@@ -194,7 +194,7 @@ if __name__ == "__main__":
 
     import fitness
     fitness_func = fitness.create_fitness_function_v1(root_path+"images/microsoft_cam/24h/south/")
-    alg = EvoAlg(mutation_rate=1, mu=0, sigma=1, transform_image=transform_image, population_size=20, individual_size=12, fitness_func=fitness_func,
+    alg = EvoAlg(mutation_rate=3, mu=0, sigma=2, transform_image=transform_image, population_size=100, individual_size=12, fitness_func=fitness_func,
                  parent_selection_pressure=1.0, to_be_killed_selection_pressure=1.0)
     best = alg.run(None)
 
@@ -210,6 +210,8 @@ if __name__ == "__main__":
         if file[-3:] == 'png':
             img = cv2.imread(root_path+"images/microsoft_cam/24h/south/" + file)
             cv2.putText(img, file, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255))
+            img = img.astype(np.float32)
+            img /= 255
 
             ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
             lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
