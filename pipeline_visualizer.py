@@ -69,8 +69,11 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
                 value = range[slider_value]
             op.params[param_name] = value
 
-            run_pipeline(first_change=op)
-            render_results()
+            import threading
+            def change():
+                run_pipeline(first_change=op)
+                render_results()
+            threading.Thread(target=change).start()
         return callback
 
     def render_results():
@@ -262,6 +265,7 @@ if __name__ == '__main__':
 
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png"]
     images = list(map(cv2.imread, ["images/microsoft_cam/"+img_path for img_path in img_paths]))
+    images = [i for i in images if i is not None]
 
     iterative_blur_pipeline = [
         threshold_op(cv2.THRESH_TOZERO_INV),
