@@ -4,60 +4,89 @@ import numpy as np
 import utilities
 
 
-def detect(img):
-    # if img.dtype != np.float32:
-    #     img = img.astype(np.float32)
-    #     img /= 255
-    # hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    # ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-    # transform_vector = [0.3756748599999996, 1.3100668899999999, 3.65993528, 0.000728242339, -12.494303939999975, -1.41144737, -0.484814647, 0.125014553, 0.696660682, 0.332596334, -5.443031946999997, -4.181805536000002]
-    # transformed = utilities.transform_image((img, hsv, lab, ycrcb), transform_vector)
-
-    #utilities.show(transformed, "transformed image", fullscreen=True)
-
-    transformed = utilities.as_uint8(img)
-    middle = utilities.get_middle(transformed)
-    box = utilities.get_box(transformed, middle, 100)
+def detect(best_transformation, img):
+    # utilities.show(img)
+    # utilities.show(best_transformation)
+    best_transformation = utilities.as_uint8(best_transformation)
+    middle = utilities.get_middle(best_transformation)
+    box = utilities.get_box(best_transformation, middle, 100)
+    if np.average(box) > np.average(best_transformation):
+        print("Inverting image")
+        best_transformation = 255 - best_transformation
 
     blur_size = 5
-    transformed = cv2.blur(transformed, (blur_size, blur_size))
-    hist = cv2.calcHist([transformed], [0], None, [256], [0, 256])
+    best_transformation = cv2.blur(best_transformation, (blur_size, blur_size))
+
+    hist = cv2.calcHist([best_transformation], [0], None, [256], [0, 256])
     hist /= sum(hist)
 
     tot = 0.0
-    i = 0
-    increments = 1
-    if np.average(box) > np.average(transformed):
-        i = 255
-        increments = -1
+    idx = 0
+
     while tot < 0.3:
-        tot += hist[i]
-        i += increments
+        tot += hist[idx]
+        idx += 1
 
-    ret, transformed = cv2.threshold(transformed, i, 255, cv2.THRESH_TOZERO)
-    box[:,:] = 0
-    utilities.show(transformed, time_ms=10)
+    box_hist = utilities.get_histogram(best_transformation)
+    box_hist /= sum(box_hist)
+    argmax = np.argmax(box_hist)
+    cur = argmax
+    low = argmax
+    high = argmax
+    tot_sum = 0.0
+    while tot_sum < 0.3:
+        tot_sum += box_hist[cur]
+        if high == 255:
+            cur = low - 1
+        elif low == 0:
+            cur = high + 1
+        else:
+            if box_hist[high+1] > box_hist[low-1]:
+                cur = high + 1
+            else:
+                cur = low - 1
+        low = min(cur, low)
+        high = max(cur, high)
 
-    transformed[np.where(transformed == 255)] = 254
+    def threshold_range(img, lo, hi):
+        th_lo = cv2.threshold(img, lo, 255, cv2.THRESH_BINARY)[1]
+        th_hi = cv2.threshold(img, hi, 255, cv2.THRESH_BINARY_INV)[1]
+        return cv2.bitwise_and(th_lo, th_hi)
+    print("Thresholding between {} and {}".format(low, high))
+    best_transformation = threshold_range(best_transformation, low, high)
+    # ret, best_transformation = cv2.threshold(best_transformation, idx, 255, cv2.THRESH_TOZERO)
+    box = utilities.get_box(best_transformation, middle, 100)
+    box[:,:] = 255
+    # utilities.show(best_transformation)
 
+    best_transformation[np.where(best_transformation == 255)] = 254
 
-    #utilities.show(transformed, "transformed image", fullscreen=True, time_ms=10)
+    # utilities.show(best_transformation, "transformed image", fullscreen=True, time_ms=0)
 
-    num_filled, transformed, _, _ = cv2.floodFill(transformed, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
+    num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
 
-    transformed[np.where(transformed != 255)] = 0
+    best_transformation[np.where(best_transformation != 255)] = 0
+    # utilities.show(best_transformation)
 
-    # kernel_size = 7
-    # iterations = 3
-    # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size,kernel_size))
-    # transformed = cv2.erode(transformed, kernel, iterations=iterations)
-    # transformed = cv2.dilate(transformed, kernel, iterations=iterations-1)
-    #
+    # utilities.show(best_transformation)
+    # utilities.show(img)
+
+    kernel_size = 3
+    iterations = 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size,kernel_size))
+    best_transformation = cv2.erode(best_transformation, kernel, iterations=iterations)
+    best_transformation = cv2.dilate(best_transformation, kernel, iterations=iterations-1)
+
+    best_transformation[np.where(best_transformation == 255)] = 254
+    num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
+    best_transformation[np.where(best_transformation != 255)] = 0
+
+    img[np.where(best_transformation != 0)] = 255
+
     # utilities.show(transformed, time_ms=10)
     #utilities.show(transformed, "transformed image", fullscreen=True, time_ms=10)
 
-    im2, contours, hierarchy = cv2.findContours(transformed.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    im2, contours, hierarchy = cv2.findContours(best_transformation.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
     if len(contours) > 0:
         # IDEA: For each vertex, see if the density inside the triangle made by connecting this vertex with the previous
@@ -65,8 +94,8 @@ def detect(img):
         # If it is, we should probably remove this vertex as it is the result
         #  of a "thin arm" that the flood fill followed.
         polygon = contours[0]
-        for i in range(1, len(contours)):
-            polygon = np.concatenate((polygon, contours[i]))
+        for idx in range(1, len(contours)):
+            polygon = np.concatenate((polygon, contours[idx]))
 
         convex_hull = cv2.convexHull(polygon)
         # temp = utilities.draw_convex_hull(img, convex_hull)
@@ -77,37 +106,65 @@ def detect(img):
         # utilities.show(temp, "contours")
 
         convex_hull_as_list = []
-        for i in range(len(convex_hull)):
-            vertex = convex_hull[i][0]
+        for idx in range(len(convex_hull)):
+            vertex = convex_hull[idx][0]
             convex_hull_as_list.append((vertex[0], vertex[1]))
 
 
-        convex_hull_mask = utilities.poly2mask(convex_hull, transformed)
+        convex_hull_mask = utilities.poly2mask(convex_hull, best_transformation)
         convex_hull_n = np.count_nonzero(convex_hull_mask)
+        convex_hull_n_white = np.count_nonzero(best_transformation[np.where(convex_hull_mask != 0)])
+        convex_hull_density = convex_hull_n_white / convex_hull_n
+        # print("Convex hull density:", convex_hull_density)
+        copy = best_transformation.copy()
 
         # utilities.show(convex_hull_mask, time_ms=10)
-        transformed[np.where(convex_hull_mask == 0)] = 120
+        outside_convex_hull_color = 0
+        outside_triangle_not_filled_color = int(1/6 * 255)
+        outside_triangle_filled_color = int(2/3 * 255)
+        inside_triangle_not_filled_color = int(2/6 * 255)
+        inside_triangle_filled_color = 255
 
-        convex_hull_n_white = np.count_nonzero(transformed[np.where(convex_hull_mask != 0)])
-        convex_hull_density = convex_hull_n_white / convex_hull_n
-        print("Convex hull density:", convex_hull_density)
+        copy[np.where(convex_hull_mask == 0)] = outside_convex_hull_color
+        copy[np.where((convex_hull_mask != 0) & (copy != 0))] = outside_triangle_filled_color
+        copy[np.where((convex_hull_mask != 0) & (copy == 0))] = outside_triangle_not_filled_color
 
-        utilities.show(transformed, time_ms=0)
+        # utilities.show(best_transformation, time_ms=0)
 
         new_convex_hull = []
-        for i in range(len(convex_hull)):
-            v1 = convex_hull[(i-1)%len(convex_hull)]
-            v2 = convex_hull[i]
-            v3 = convex_hull[(i+1)%len(convex_hull)]
 
-            triangle_mask = utilities.poly2mask([v1, v2, v3], transformed)
-            triangle_n_white = np.count_nonzero(transformed[np.where(triangle_mask != 0)])
+        #import transformer
+        #from image import Image
+        #light_mask = transformer.Transformer.get_light_mask(Image(image_data=img))
+
+        idx = 0
+        while idx < len(convex_hull_as_list):
+            v1 = convex_hull_as_list[(idx-1)%len(convex_hull_as_list)]
+            v2 = convex_hull_as_list[idx]
+            v3 = convex_hull_as_list[(idx+1)%len(convex_hull_as_list)]
+
+            triangle_mask = utilities.poly2mask([v1, v2, v3], best_transformation)
+
+            copy[np.where((triangle_mask == 0) & (copy == inside_triangle_filled_color))] = outside_triangle_filled_color
+            copy[np.where((triangle_mask == 0) & (copy == inside_triangle_not_filled_color))] = outside_triangle_not_filled_color
+
+            copy[np.where((triangle_mask != 0) & (copy == outside_triangle_filled_color))] = inside_triangle_filled_color
+            copy[np.where((triangle_mask != 0) & (copy == outside_triangle_not_filled_color))] = inside_triangle_not_filled_color
+
+            triangle_n_white = np.count_nonzero(best_transformation[np.where(triangle_mask != 0)])
             triangle_n = np.count_nonzero(triangle_mask)
             triangle_density = triangle_n_white / triangle_n
-            print(triangle_density)
-            if triangle_density > 0.3*convex_hull_density:
-                print("Density above 0.5, adding")
+
+            #light_density = np.count_nonzero(light_mask[np.where(triangle_mask != 0)]) / triangle_n
+
+            limit = 0.4*convex_hull_density# + light_density / 2
+            # utilities.show(copy, text="Triangle density: {}, limit: {}".format(round(triangle_density, 2), round(limit, 2)))
+            if triangle_density > limit:
                 new_convex_hull.append(v2)
+                idx += 1
+            else:
+                convex_hull_as_list.remove(v2)
+                copy[np.where(triangle_mask != 0)] = outside_convex_hull_color
         convex_hull = np.array(new_convex_hull)
 
 
@@ -120,85 +177,3 @@ def detect(img):
         return convex_hull
 
     return
-
-    box = utilities.get_box(transformed, middle, 40)
-    amin = np.amin(box)
-    amax = np.amax(box)
-    #ret, transformed = cv2.threshold(transformed, 100, 255, cv2.THRESH_BINARY)
-    #from matplotlib import pyplot as plt
-    #utilities.plot_histogram(box)
-    #utilities.plot_histogram(transformed)
-    #plt.show()
-    #return
-    ret, transformed = cv2.threshold(transformed, 50, 255, cv2.THRESH_BINARY)
-    #transformed = 255 - transformed
-    #ret, transformed = cv2.threshold(transformed, 255-amin, 255, cv2.THRESH_TOZERO)
-    utilities.show(transformed, "transformed image", fullscreen=True, time_ms=10)
-    #hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(float)
-
-    #hue = hsv[:,:,0] / np.amax(hsv[:,:,0])
-
-    transformed = transformed.astype(np.float32)
-    transformed /= 255
-    #utilities.show(transformed, "transformed image", fullscreen=True, time_ms=10)
-    #return
-
-    hue = transformed
-    #hue = cv2.blur(hue, (3,3))
-    #hue = hue**16
-
-    hue = hue * 255
-    hue = hue.astype(np.uint8)
-
-    #utilities._show(hue)
-    iterations = 2
-    size = 15
-
-    dilationElement = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size,size))
-    hue = cv2.dilate(hue, dilationElement, iterations=iterations)
-
-    utilities.show(hue, "after dilation", fullscreen=True)
-    hue[np.where(hue == 255)] = 254
-    box_size = 30
-    hue[middle[1]-box_size:middle[1]+box_size, middle[0]-box_size:middle[0]+box_size] = 0
-    mask = utilities.flood_fill_until(hue, 0.2)
-    # diff = 2
-    # num_filled = 0
-    # while num_filled < 0.2*(len(img) * len(img[0])):
-    #     num_filled, mask, _, _ = cv2.floodFill(hue.copy(), None, middle, 255, upDiff=diff, loDiff=diff, flags=cv2.FLOODFILL_FIXED_RANGE)
-    #     diff += 1
-    # utilities.show(mask, "mask")
-
-    # hue[np.where(mask != 255)] = 0
-    # utilities.show(hue, "hue")
-    # return
-
-    # hue *= 255
-    # hue = hue.astype(np.uint8)
-    # ret, hue = cv2.threshold(hue, 1, 255, cv2.THRESH_BINARY)
-    #
-    # utilities.show(hue)
-
-    # im2, contours, hierarchy = cv2.findContours(hue, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    if len(contours) > 0:
-        polygon = contours[0]
-        for i in range(1, len(contours)):
-            polygon = np.concatenate((polygon, contours[i]))
-
-        convex_hull = cv2.convexHull(polygon)
-        # temp = utilities.draw_convex_hull(img, convex_hull)
-        # utilities.show(temp, "contours")
-
-        convex_hull = cv2.approxPolyDP(convex_hull, 5, True)
-        # temp = utilities.draw_convex_hull(img, convex_hull)
-        # utilities.show(temp, "contours")
-
-        new_convex_hull = []
-        for i in range(len(convex_hull)):
-            if utilities.get_angle(convex_hull[(i-1)%len(convex_hull)][0], convex_hull[i][0], convex_hull[(i+1)%len(convex_hull)][0]) > 25:
-                new_convex_hull.append(convex_hull[i])
-        convex_hull = np.array(new_convex_hull)
-
-        return convex_hull

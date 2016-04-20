@@ -22,6 +22,16 @@ class Image:
         if image_data is not None:
             self.bgr = image_data
 
+        # utilities.show(self.bgr)
+        self.bgr = utilities.as_float32(self.bgr)
+        target_averages = [0.636815, 0.543933, 0.469305]
+        for i in range(3):
+            self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
+        self.bgr[np.where(self.bgr > 1.0)] = 1.0
+        self.bgr[np.where(self.bgr < 0.0)] = 0.0
+        self.bgr = utilities.as_uint8(self.bgr)
+        # utilities.show(self.bgr)
+
         self.hsv = None
         self.lab = None
         self.ycrcb = None

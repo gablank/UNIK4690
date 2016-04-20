@@ -265,8 +265,8 @@ def transform_image(img_spaces, vec):
     idx += 1
 
     h, s, v = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
-    transformed += vec[idx] * h
-    idx += 1
+    # transformed += vec[idx] * h
+    # idx += 1
     transformed += vec[idx] * s
     idx += 1
     transformed += vec[idx] * v

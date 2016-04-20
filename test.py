@@ -102,6 +102,36 @@ def sum_of_squared_gradients(img, mask=None, x_gradient_squared=None, y_gradient
 
 
 if __name__ == "__main__":
+    from image import Image
+    import utilities
+    image1 = Image("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-12_18:43:04.png")
+    image2 = Image("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-12_19:10:03.png")
+
+    bgr = image2.get_bgr()
+    b = bgr[:,:,0]
+    g = bgr[:,:,1]
+    r = bgr[:,:,2]
+    b_target_average = np.average(image1.get_bgr()[:,:,0])
+    g_target_average = np.average(image1.get_bgr()[:,:,1])
+    r_target_average = np.average(image1.get_bgr()[:,:,2])
+    print(b_target_average, g_target_average, r_target_average)
+    b_ratio = np.average(image1.get_bgr()[:,:,0]) / np.average(image2.get_bgr()[:,:,0])
+    g_ratio = np.average(image1.get_bgr()[:,:,1]) / np.average(image2.get_bgr()[:,:,1])
+    r_ratio = np.average(image1.get_bgr()[:,:,2]) / np.average(image2.get_bgr()[:,:,2])
+    print(b_ratio, g_ratio, r_ratio)
+    b *= b_ratio
+    b[np.where(b > 1.0)] = 1.0
+    g *= g_ratio
+    g[np.where(g > 1.0)] = 1.0
+    r *= r_ratio
+    r[np.where(r > 1.0)] = 1.0
+    image2.bgr = bgr
+
+    utilities.show(image1.get_bgr(), "image1", text=image1.filename, draw_histograms=True, time_ms=1)
+    utilities.show(image2.get_bgr(), "image2", text=image2.filename, draw_histograms=True)
+
+    exit(0)
+
     filename = "IMG_20160330_155620.jpg"
 
     img = cv2.imread("images/1920x1080/" + filename)

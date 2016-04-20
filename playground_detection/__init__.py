@@ -3,12 +3,15 @@ import cv2
 import numpy as np
 import playground_detection.maximize_density as maximize_density
 import playground_detection.flood_fill as flood_fill
+import utilities
+from image import Image
 
 
-def detect(img, method="flood_fill", draw_field=False):
+def detect(image, best_transformation, method="flood_fill", draw_field=False):
+    img = image.get_bgr(np.uint8)
     polygon = [(0, 0), (len(img)-1, 0), (len(img)-1, len(img[0])-1), (0, len(img[0])-1)]
     if method == "flood_fill":
-        polygon = flood_fill.detect(img)
+        polygon = flood_fill.detect(best_transformation, img)
     elif method == "maximize_density":
         polygon = maximize_density.detect(img)
 
@@ -27,11 +30,19 @@ def detect(img, method="flood_fill", draw_field=False):
             pt1 = (polygon[idx][0], polygon[idx][1])
             pt2 = (polygon[(idx+1)%len(polygon)][0], polygon[(idx+1)%len(polygon)][1])
         else:
-            pt1 = polygon[idx][0]
-            pt2 = polygon[(idx+1)%len(polygon)][0]
-            pt1 = (pt1[0], pt1[1])
-            pt2 = (pt2[0], pt2[1])
+            pt1 = (polygon[idx][0], polygon[idx][1])
+            pt2 = (polygon[(idx+1)%len(polygon)][0], polygon[(idx+1)%len(polygon)][1])
         lines.append((pt1, pt2, idx))
+
+    for idx, line in enumerate(lines):
+        if idx % 2 == 0:
+            color = (0, 0, 255)
+        else:
+            color = (255, 0, 0)
+        pt1, pt2, _ = line
+        cv2.line(img, pt1, pt2, color, 3)
+    utilities.show(img, time_ms=100, text=image.filename)
+    return None
 
     # sort by line length
     lines.sort(key=lambda x: (x[0][0]-x[1][0])**2 + (x[0][1]-x[1][1])**2)
