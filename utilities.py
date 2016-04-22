@@ -392,8 +392,8 @@ def transform_image(img_spaces, vec):
 
     idx = 0
     b, g, r = bgr[:,:,0], bgr[:,:,1], bgr[:,:,2]
-    # transformed += vec[idx] * b
-    # idx += 1
+    transformed += vec[idx] * b
+    idx += 1
     transformed += vec[idx] * g
     idx += 1
     transformed += vec[idx] * r
@@ -437,6 +437,7 @@ def as_uint8(img):
     if img.dtype not in (np.float32, np.float64):
         raise RuntimeError("Unknown dtype: {}".format(img.dtype))
 
+    img -= np.amin(img)
     img /= np.amax(img)
     img *= 255
     img = np.around(img)
@@ -513,6 +514,39 @@ def locate_file(path):
             path = os.path.join(root, path)
             break
     return path
+
+
+def show_all(image, time_ms=0):
+    bgr = image.get_bgr()
+    hsv = image.get_hsv()
+    lab = image.get_lab()
+    ycrcb = image.get_ycrcb()
+    spaces = []
+    for i in range(3):
+        spaces.append(bgr[:,:,i])
+    for i in range(3):
+        spaces.append(hsv[:,:,i])
+    for i in range(3):
+        spaces.append(lab[:,:,i])
+    for i in range(3):
+        spaces.append(ycrcb[:,:,i])
+
+    to_show = np.zeros(bgr.shape[:2])
+
+    width_per = bgr.shape[1] // 4
+    height_per = bgr.shape[0] // 3
+    idx = 0
+    y = 0
+    for row in (1,2,3):
+        x = 0
+        for col in (1,2,3,4):
+            to_show[y:y+height_per, x:x+width_per] = cv2.resize(spaces[idx], (width_per, height_per), cv2.INTER_CUBIC)
+            idx += 1
+            x += width_per
+        y += height_per
+
+    return show(to_show, time_ms=time_ms, fullscreen=True)
+
 
 
 if __name__ == "__main__":
