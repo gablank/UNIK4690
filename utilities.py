@@ -185,6 +185,11 @@ def select_polygon(orig_img):
     return polygon
 
 def select_circles(img):
+    """
+    Interactively select a number of circles. Add center with LB and approx. radius with
+    LB again. Then adjust position and radius with the keyboard.
+    Return a list of the circles. Each represented by a tuple: ((cx, cy), r)
+    """
     orig_img = img.copy()
     canvas = orig_img.copy()
 
@@ -236,6 +241,7 @@ def select_circles(img):
     cv2.setMouseCallback("circles-select", mouse_callback)
     cv2.imshow("circles-select", orig_img)
 
+    # Over-engineering ftw :) (This might make sense for arbitrary rectange selections though)
     state_labels = ['Move (jkli)', 'Grow/Shrink (jl)']
     state_transforms = [
         lambda x,y,r,dx,dy: ((x+dx, y+dy), r),
@@ -243,21 +249,23 @@ def select_circles(img):
     ]
     state = 0
     active_transform = state_transforms[state]
-    message = state_labels[state]
+    # message = state_labels[state]
+    message = 'Move (jkli), Grow/Shrink (ed), Done (s), Quit (q)'
     while True:
         key = wait_for_key()
         if key == 'u':
             circles.pop()
-        elif key == 'n':
+        elif key == 'n' and False:
             state = (state + 1) % len(state_labels)
             active_transform = state_transforms[state]
             message = state_labels[state]
         elif key == 's':
             break
+        elif key == 'q':
+            exit(0)
 
         if len(circles) > 0:
             cur = circles[-1]
-            print(cur)
             args = (*cur[0], cur[1])
             new_circle = None
             if key == 'j':
@@ -268,6 +276,11 @@ def select_circles(img):
                 new_circle = active_transform(*args,  0, -1)
             elif key == 'k':
                 new_circle = active_transform(*args,  0,  1)
+            elif key == 'e':
+                new_circle = (cur[0],cur[1]+1) # radius
+            elif key == 'd':
+                new_circle = (cur[0],cur[1]-1) # radius
+
             if new_circle:
                 circles[-1] = new_circle
 
@@ -276,47 +289,6 @@ def select_circles(img):
     cv2.destroyWindow("circles-select")
     return circles
 
-def select_rects(img):
-    """
-    Interactively select a number of rectangles. Add points with LB and finish with key "s".
-    Return a list of the rectangles. Each represented by the selected (two) points.
-    """
-    orig_img = img.copy()
-    rects = []
-    rect = []
-    color = (0,0,255)
-    # Make drag image (in qt viewer) work without triggering clicks:
-    mouse_moved_flag = False 
-    def mouse_callback(ev, x, y, flags, param):
-        nonlocal orig_img
-        nonlocal rect
-        nonlocal mouse_moved_flag
-        img = orig_img.copy()
-        if ev == cv2.EVENT_LBUTTONDOWN:
-            mouse_moved_flag = False
-        elif ev == cv2.EVENT_LBUTTONUP and not mouse_moved_flag:
-            rect.append((x,y))
-            if len(rect) == 2:
-                cv2.rectangle(img, rect[0], (x,y), color, 2)
-                rects.append(rect)
-                rect = []
-                orig_img = img
-        elif ev == cv2.EVENT_MOUSEMOVE:
-            mouse_moved_flag = True
-            if len(rect) > 0:
-                cv2.rectangle(img, rect[0], (x,y), color, 2)
-            elif len(rect) == 0:
-                cv2.line(img, (x,0), (x, img.shape[0]), color, 2)
-                cv2.line(img, (0,y), (img.shape[1], y), color, 2)
-
-        cv2.imshow("rects-select", img)
-        
-    cv2.namedWindow("rects-select")
-    cv2.setMouseCallback("rects-select", mouse_callback)
-    cv2.imshow("rects-select", orig_img)
-    wait_for_key('s')
-    cv2.destroyWindow("rects-select")
-    return rects
 
 def two_point_rect_to_bb(p1, p2):
     """
@@ -351,15 +323,20 @@ def get_histogram(single_channel_img):
     return cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
 
 
-def draw_histogram(single_channel_img, max_height=256, padding=2):
+def draw_histogram(single_channel_img, max_height=256, padding=2,
+                   ignored_values=[], fg=0, bg=255, mask=None):
     """
     Get an image of the histogram (to be painted onto other images etc)
     """
     single_channel_img = as_uint8(single_channel_img)
-    hist = cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
+    hist = cv2.calcHist([single_channel_img], [0], mask, [256], [0, 256])
 
-    hist_img = np.ones((max_height+2*padding, 256 + 2*padding))
-    hist_img = as_uint8(hist_img)
+    value_type = np.uint8
+    if type(fg) != int or type(bg) != int:
+        value_type = np.float32
+
+    hist[ignored_values] = 0
+    hist_img = np.ones((max_height+2*padding, 256 + 2*padding), dtype=value_type)*bg
     hist /= np.amax(hist)
     hist *= max_height
 
@@ -369,7 +346,7 @@ def draw_histogram(single_channel_img, max_height=256, padding=2):
         pt1 = (padding+x, padding + max_height-y)
         pt2 = (padding+x, padding + max_height-1)
 
-        cv2.line(hist_img, pt1, pt2, (0, 0, 0))
+        cv2.line(hist_img, pt1, pt2, (fg))
     return hist_img
 
 def get_metadata_path(img_path):
