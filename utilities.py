@@ -17,6 +17,19 @@ def get_middle(img):
     mid_y = int(round(img.shape[0] / 2, 0))
     return (mid_x, mid_y)
 
+def draw_label(to_show, text):
+    """
+    Draw a label with defaults (position, etc.) that should work in most cases
+    """
+    x_pos, y_pos = 20, 30
+    padding = 2
+    font_face = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1
+    thickness = 1
+    text_size, _ = cv2.getTextSize(text, font_face, font_scale, thickness)
+
+    cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
+    cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
 
 def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False):
     """
@@ -30,15 +43,7 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
     to_show = as_uint8(to_show)
 
     if text is not None:
-        x_pos, y_pos = 20, 30
-        padding = 2
-        font_face = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 1
-        thickness = 1
-        text_size, _ = cv2.getTextSize(text, font_face, font_scale, thickness)
-
-        cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
-        cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
+        draw_label(to_show, text)
 
     if draw_histograms:
         n_channels = 0 if len(to_show.shape) < 3 else to_show.shape[2]
