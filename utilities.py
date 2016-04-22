@@ -145,7 +145,7 @@ def wait_for_key(char=None):
 
         if char is None:
             return chr(key_code)
-        elif key == ord(char):
+        elif key_code == ord(char):
             return chr(key_code)
 
 def select_polygon(orig_img):
