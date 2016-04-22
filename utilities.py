@@ -184,17 +184,167 @@ def select_polygon(orig_img):
     cv2.destroyWindow("polygon-select")
     return polygon
 
+def select_circles(img):
+    orig_img = img.copy()
+    canvas = orig_img.copy()
+
+    circles = []
+    center = None
+    color = (0,0,255)
+    # Make drag image (in qt viewer) work without triggering clicks:
+    mouse_moved_flag = False 
+
+    message = ""
+
+    def draw(canvas, center, r):
+        cv2.circle(canvas, center, r, color, 1)
+
+    def redraw(canvas):
+        draw_label(canvas, message)
+        for center, r in circles:
+            draw(canvas, center, r)
+        return canvas
+
+    def mouse_callback(ev, x, y, flags, param):
+        nonlocal canvas
+        nonlocal center
+        nonlocal mouse_moved_flag
+
+        canvas = redraw(orig_img.copy())
+
+        r = round(math.sqrt((center[0]-x)**2 + (center[1]-y)**2) if center else 0)
+
+        if ev == cv2.EVENT_LBUTTONDOWN:
+            mouse_moved_flag = False
+        elif ev == cv2.EVENT_LBUTTONUP and not mouse_moved_flag:
+            if not center:
+                center = (x,y)
+            else:
+                circles.append((center, r))
+                draw(canvas, center, r)
+                center = None
+        elif ev == cv2.EVENT_MOUSEMOVE:
+            mouse_moved_flag = True
+            if not center:
+                pass
+            else:
+                draw(canvas, center, r)
+
+        cv2.imshow("circles-select", canvas)
+        
+    cv2.namedWindow("circles-select")
+    cv2.setMouseCallback("circles-select", mouse_callback)
+    cv2.imshow("circles-select", orig_img)
+
+    state_labels = ['Move (jkli)', 'Grow/Shrink (jl)']
+    state_transforms = [
+        lambda x,y,r,dx,dy: ((x+dx, y+dy), r),
+        lambda x,y,r,dr,_:  ((x, y), r+dr),
+    ]
+    state = 0
+    active_transform = state_transforms[state]
+    message = state_labels[state]
+    while True:
+        key = wait_for_key()
+        if key == 'u':
+            circles.pop()
+        elif key == 'n':
+            state = (state + 1) % len(state_labels)
+            active_transform = state_transforms[state]
+            message = state_labels[state]
+        elif key == 's':
+            break
+
+        if len(circles) > 0:
+            cur = circles[-1]
+            print(cur)
+            args = (*cur[0], cur[1])
+            new_circle = None
+            if key == 'j':
+                new_circle = active_transform(*args, -1,  0)
+            elif key == 'l':
+                new_circle = active_transform(*args,  1,  0)
+            elif key == 'i':
+                new_circle = active_transform(*args,  0, -1)
+            elif key == 'k':
+                new_circle = active_transform(*args,  0,  1)
+            if new_circle:
+                circles[-1] = new_circle
+
+        cv2.imshow("circles-select", redraw(orig_img.copy()))
+
+    cv2.destroyWindow("circles-select")
+    return circles
+
+def select_rects(img):
+    """
+    Interactively select a number of rectangles. Add points with LB and finish with key "s".
+    Return a list of the rectangles. Each represented by the selected (two) points.
+    """
+    orig_img = img.copy()
+    rects = []
+    rect = []
+    color = (0,0,255)
+    # Make drag image (in qt viewer) work without triggering clicks:
+    mouse_moved_flag = False 
+    def mouse_callback(ev, x, y, flags, param):
+        nonlocal orig_img
+        nonlocal rect
+        nonlocal mouse_moved_flag
+        img = orig_img.copy()
+        if ev == cv2.EVENT_LBUTTONDOWN:
+            mouse_moved_flag = False
+        elif ev == cv2.EVENT_LBUTTONUP and not mouse_moved_flag:
+            rect.append((x,y))
+            if len(rect) == 2:
+                cv2.rectangle(img, rect[0], (x,y), color, 2)
+                rects.append(rect)
+                rect = []
+                orig_img = img
+        elif ev == cv2.EVENT_MOUSEMOVE:
+            mouse_moved_flag = True
+            if len(rect) > 0:
+                cv2.rectangle(img, rect[0], (x,y), color, 2)
+            elif len(rect) == 0:
+                cv2.line(img, (x,0), (x, img.shape[0]), color, 2)
+                cv2.line(img, (0,y), (img.shape[1], y), color, 2)
+
+        cv2.imshow("rects-select", img)
+        
+    cv2.namedWindow("rects-select")
+    cv2.setMouseCallback("rects-select", mouse_callback)
+    cv2.imshow("rects-select", orig_img)
+    wait_for_key('s')
+    cv2.destroyWindow("rects-select")
+    return rects
+
+def two_point_rect_to_bb(p1, p2):
+    """
+    Converts a rectangle represented by two points to a bounding box: a (x,y,w,h) tuple
+    1----+    2----o    +----2    +----1      +-w--*
+    |    | or |    | or |    | or |    | ->   h    |
+    +----2    o----1    1----*    2----*    (x,y)--*
+    """
+    x = min(p1[0], p2[0])
+    y = min(p1[1], p2[1])
+    w = abs(p1[0] - p2[0])
+    h = abs(p1[1] - p2[1])
+    return (x, y, w, h)
+
+
+
 from matplotlib import pyplot as plt
 def plot_histogram(img, channels=[0], mask=None, colors=["b", "g", "r"], max=None):
     """
     Adds the histogram to the active matplotlib plot. Use plt.show() after to show the plot.
     """
+    if(type(colors) == str):
+        colors=[colors]
     max = np.max(img)+0.00001 if max is None else max
     for idx, ch in enumerate(channels):
         hist = cv2.calcHist([img], [ch], mask, [256], [0, max])
         hist = hist/sum(hist) # normalize so each bucket represents percentage of total pixels
         plt.plot(hist, colors[idx])
-
 
 def get_histogram(single_channel_img):
     single_channel_img = as_uint8(single_channel_img)
@@ -224,10 +374,13 @@ def draw_histogram(single_channel_img, max_height=256, padding=2):
 
 def get_metadata_path(img_path):
     img_name = os.path.basename(img_path)
-    img_base = "".join(img_name.split(".")[:-1])
-    img_dir = os.path.dirname(img_path)
+    img_dir = img_path
+    is_dir_path = img_name.find(".") < 0
+    if not is_dir_path:
+        img_base = "".join(img_name.split(".")[:-1])
+        img_dir = os.path.dirname(img_path)
     series_metadata_path = os.path.join(img_dir, "metadata.json")
-    if os.path.exists(series_metadata_path):
+    if is_dir_path or os.path.exists(series_metadata_path):
         return series_metadata_path
     else:
         return os.path.join(img_dir, img_base+".json")
@@ -246,7 +399,7 @@ def update_metadata(img_path, new_meta_data):
     meta_dict.update(new_meta_data)
     metadata_path = get_metadata_path(img_path)
     with open(metadata_path, "w") as fp:
-        json.dump(meta_dict, fp)
+        json.dump(meta_dict, fp) # overwrites on error too... 
     return meta_dict
 
 
