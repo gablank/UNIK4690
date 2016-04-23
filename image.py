@@ -6,7 +6,7 @@ import os
 
 
 class Image:
-    def __init__(self, path=None, image_data=None):
+    def __init__(self, path=None, image_data=None, color_normalization=True):
         if (path is None and image_data is None) or (path is not None and image_data is not None):
             raise RuntimeError("One and only one of path and image_data may be not None!")
 
@@ -22,20 +22,16 @@ class Image:
         if image_data is not None:
             self.bgr = image_data
 
-        # utilities.show(self.bgr, text=self.filename)
-        #for i in range(3):
-        #    self.bgr[:,:,i] = cv2.equalizeHist(self.bgr[:,:,i])
-        # utilities.show(self.bgr, text=self.filename + " equalized")
-
-        # Perform a weird kind of histogram equalization
-        self.bgr = utilities.as_float32(self.bgr)
-        target_averages = [0.636815, 0.543933, 0.469305]
-        for i in range(3):
-            self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
-        self.bgr[np.where(self.bgr > 1.0)] = 1.0
-        self.bgr[np.where(self.bgr < 0.0)] = 0.0
-        # self.bgr = utilities.as_uint8(self.bgr)
-        # utilities.show(self.bgr)
+        if color_normalization:
+            # utilities.show(self.bgr)
+            self.bgr = utilities.as_float32(self.bgr)
+            target_averages = [0.636815, 0.543933, 0.469305]
+            for i in range(3):
+                self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
+            self.bgr[np.where(self.bgr > 1.0)] = 1.0
+            self.bgr[np.where(self.bgr < 0.0)] = 0.0
+            self.bgr = utilities.as_uint8(self.bgr)
+            # utilities.show(self.bgr)
 
         self.hsv = None
         self.lab = None
