@@ -40,7 +40,7 @@ class PetanqueDetection:
 
         # Playground detection adjustment
         # Input: Original image, polygon defining the playground as list of points
-        # Output: List of points of same size, defining the playground
+        # Output: List of points of same size, defining the playground. First point is considered the origin.
         playground_polygon = self._user_adjust_playground(image, playground_polygon)
 
         # Ball detection
@@ -89,7 +89,8 @@ class PetanqueDetection:
 
                 line_color = (0, 0, 255)
                 dot_color = (255, 0, 0)
-                pressed_dot_color = (0, 255, 0)
+                pressed_dot_color = (150, 0, 0)
+                origin_dot_color = (0, 255, 0)
                 mouseover = polygon[mouseover_idx] if mouseover_idx is not None else None
                 pressed = polygon[pressed_idx] if pressed_idx is not None else None
 
@@ -105,6 +106,8 @@ class PetanqueDetection:
                         radius = 11
                     if pressed == pt:
                         color = pressed_dot_color
+                    if idx == 0:
+                        color = origin_dot_color
                     cv2.circle(bgr, pt, radius, color, cv2.FILLED)
 
                 cv2.imshow(self._win_name, bgr)
@@ -153,12 +156,25 @@ class PetanqueDetection:
         while run:
             key = utilities.wait_for_key()
 
+            with userdata["lock"]:
+                mouseover_idx = userdata["mouseover_idx"]
+                pressed_idx = userdata["pressed_idx"]
+                polygon = userdata["polygon"].copy()
+
             if key in ('s', 'q'):
                 run = False
 
-            if not run:
-                with userdata["lock"]:
-                    userdata["run"] = run
+            elif key == 'o':
+                if mouseover_idx is not None:
+                    polygon = polygon[mouseover_idx:] + polygon[:mouseover_idx]
+                    mouseover_idx = 0
+                    pressed_idx = 0 if pressed_idx is not None else None
+
+            with userdata["lock"]:
+                userdata["run"] = run
+                userdata["polygon"] = polygon
+                userdata["mouseover_idx"] = mouseover_idx
+                userdata["pressed_idx"] = pressed_idx
 
         render_thread.join()
 
@@ -279,6 +295,7 @@ class PetanqueDetection:
             elif key == 'a':
                 balls.append((cur_mouse_pos, 1))
                 mouseover_idx = len(balls) - 1
+                pressed_idx = len(balls) - 1 if pressed_idx is not None else None
 
             elif key == 'd':
                 balls.remove(mouseover)
