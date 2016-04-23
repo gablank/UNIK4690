@@ -17,6 +17,7 @@ def get_middle(img):
     mid_y = int(round(img.shape[0] / 2, 0))
     return (mid_x, mid_y)
 
+
 def draw_label(to_show, text):
     """
     Draw a label with defaults (position, etc.) that should work in most cases
@@ -30,6 +31,7 @@ def draw_label(to_show, text):
 
     cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
+
 
 def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False):
     """
@@ -75,11 +77,13 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
     return chr(key%256)
 
 
-def get_box(img, center, side):
+def get_box(img, center=None, side=100):
     """
     P: (x,y)
     Get a square with side lengths side centered on center
     """
+    if center is None:
+        center = get_middle(img)
     first_side = int(round(side / 2, 0))
     second_side = side - first_side
     return img[center[1]-first_side:center[1]+second_side, center[0]-first_side:center[0]+second_side]
@@ -134,6 +138,7 @@ def draw_convex_hull(img, convex_hull):
         cv2.line(copy, pt1, pt2, color, 3)
     return copy
 
+
 def poly2mask(poly, size_or_img):
     size = size_or_img if type(size_or_img) != np.ndarray else size_or_img.shape[0:2]
     mask = np.zeros(size, dtype=np.uint8)
@@ -141,6 +146,7 @@ def poly2mask(poly, size_or_img):
         poly = np.array(poly)
     cv2.fillPoly(mask, [poly], 255)
     return mask
+
 
 def wait_for_key(char=None):
     while(True):
@@ -152,6 +158,7 @@ def wait_for_key(char=None):
             return chr(key_code)
         elif key_code == ord(char):
             return chr(key_code)
+
 
 def select_polygon(orig_img):
     """
@@ -183,6 +190,7 @@ def select_polygon(orig_img):
     wait_for_key('s')
     cv2.destroyWindow("polygon-select")
     return polygon
+
 
 from matplotlib import pyplot as plt
 def plot_histogram(img, channels=[0], mask=None, colors=["b", "g", "r"], max=None):
@@ -222,6 +230,7 @@ def draw_histogram(single_channel_img, max_height=256, padding=2):
         cv2.line(hist_img, pt1, pt2, (0, 0, 0))
     return hist_img
 
+
 def get_metadata_path(img_path):
     img_name = os.path.basename(img_path)
     img_base = "".join(img_name.split(".")[:-1])
@@ -232,6 +241,7 @@ def get_metadata_path(img_path):
     else:
         return os.path.join(img_dir, img_base+".json")
 
+
 def read_metadata(img_path):
     metadata_path = get_metadata_path(img_path)
     if os.path.exists(metadata_path):
@@ -240,6 +250,7 @@ def read_metadata(img_path):
             return meta_dict
     else:
         return {}
+
 
 def update_metadata(img_path, new_meta_data):
     meta_dict = read_metadata(img_path)
@@ -250,48 +261,19 @@ def update_metadata(img_path, new_meta_data):
     return meta_dict
 
 
-def transform_image(img_spaces, vec):
+def transform_image(image, vec):
     """
-    Return a list of transformations that have previously worked well
-    The factor for b is always 1
-    :param img_spaces: tuple of image spaces: (bgr, hsv, lab, YCrCb)
+    :param image: Image object
+    :param vec: dict where keys = 1D color space (with preceding image space name: bgr_b, bgr_g etc.), and the value
+    is the coefficient to multiply that color space by
     """
-    bgr, hsv, lab, ycrcb = img_spaces
+    transformed = None
 
-    transformed = np.zeros(bgr.shape[:2])
+    for image_space_name, image_space_data in image.get_color_space_dict().items():
+        if transformed is None:
+            transformed = np.zeros(image_space_data.shape[:2])
 
-    idx = 0
-    b, g, r = bgr[:,:,0], bgr[:,:,1], bgr[:,:,2]
-    transformed += vec[idx] * b
-    idx += 1
-    transformed += vec[idx] * g
-    idx += 1
-    transformed += vec[idx] * r
-    idx += 1
-
-    h, s, v = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
-    # transformed += vec[idx] * h
-    # idx += 1
-    transformed += vec[idx] * s
-    idx += 1
-    transformed += vec[idx] * v
-    idx += 1
-
-    l, a, b = lab[:,:,0], lab[:,:,1], lab[:,:,2]
-    transformed += vec[idx] * l
-    idx += 1
-    transformed += vec[idx] * a
-    idx += 1
-    transformed += vec[idx] * b
-    idx += 1
-
-    y, cr, cb = ycrcb[:,:,0], ycrcb[:,:,1], ycrcb[:,:,2]
-    transformed += vec[idx] * y
-    idx += 1
-    transformed += vec[idx] * cr
-    idx += 1
-    transformed += vec[idx] * cb
-    idx += 1
+        transformed += vec[image_space_name] * image_space_data
 
     # Normalization
     res = transformed - np.amin(transformed)
@@ -301,6 +283,7 @@ def transform_image(img_spaces, vec):
 
 
 def as_uint8(img):
+    img = img.copy()
     if img.dtype == np.uint8:
         return img
 
@@ -308,13 +291,14 @@ def as_uint8(img):
         raise RuntimeError("Unknown dtype: {}".format(img.dtype))
 
     img -= np.amin(img)
-    img /= np.amax(img)
+    img *= 1/np.amax(img)
     img *= 255
     img = np.around(img)
     return img.astype(np.uint8)
 
 
 def as_float32(img):
+    img = img.copy()
     if img.dtype in (np.float32, np.float64):
         return img.astype(np.float32) / np.amax(img)
 
@@ -417,6 +401,13 @@ def show_all(image, time_ms=0):
 
     return show(to_show, time_ms=time_ms, fullscreen=True)
 
+
+def distance(pt1, pt2):
+    """
+    Euclidean distance from pt1 to pt2
+    """
+    import math
+    return math.sqrt((pt1[0]-pt2[0])**2 + (pt1[1]-pt2[1])**2)
 
 
 if __name__ == "__main__":
