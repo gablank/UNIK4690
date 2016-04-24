@@ -6,6 +6,7 @@ import cv2
 import utilities
 import threading
 import time
+import numpy as np
 
 
 class PetanqueDetection:
@@ -13,12 +14,16 @@ class PetanqueDetection:
     All positions are width,height, except when used in numpy arrays
     All variables named image are of class Image
     The first point in playground_polygon is considered the origin
+    In this file, all homographies have the form to_H_from, where to and from are in (i, p, w), where:
+        i = image (original image)
+        p = playground_image
+        w = real world
     """
-    def __init__(self, playground_polygon=((0,0),(0,2),(2,6),(0,6)),
+    def __init__(self, playground_polygon=((0,600),(0,0),(200,0),(200,600)),
                  PlaygroundDetector=FloodFillPlaygroundDetector,
                  BallDetector=MinimizeGradientsBallDetector):
 
-        self.playground_polygon = playground_polygon
+        self.real_world_playground_polygon = playground_polygon
         self.playground_detector = PlaygroundDetector(self)
         self.ball_detector = BallDetector(self)
 
@@ -36,30 +41,43 @@ class PetanqueDetection:
         # Output: List of points of the same length as self.playground_polygon (even if it failed to detect anything!)
         # The first point is considered to be the origin, and going from point to the next in the list should trace
         # the convex hull of the points.
-        playground_polygon = self.playground_detector.detect(image)
+        camera_playground_polygon = self.playground_detector.detect(image)
 
         # Playground detection adjustment
         # Input: Original image, polygon defining the playground as list of points
         # Output: List of points of same size, defining the playground. First point is considered the origin.
-        playground_polygon = self._user_adjust_playground(image, playground_polygon)
+        camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+
+        # Homography estimation
+        # Input: Camera playground polygon as a numpy array of points,
+        # real world playground polygon as a numpy array of points
+        # Output: numpy array with shape (3,3) that represents the homography matrix from the image to the real world
+        w_H_i = self._find_homography_w_H_i(camera_playground_polygon)
+
+        # Remove everything non-playground
+        # Input: Original image, polygon defining the playground as list of points
+        # Output: Image of the size of the bounding rectangle (not angled!) of the playground, with all pixels outside
+        # the playground set to BGR (0,0,0)
+        playground_image, w_H_p = self._get_playground_image(image, camera_playground_polygon, w_H_i)
 
         # Ball detection
-        # Input: Original image, polygon defining the playground as list of points
+        # Input: Image of the playground, homography from that image to the real world positions
         # Output: List of tuples of two items. First item is the position (tuple:(x,y)), second item is the team number
-        # the ball belongs to. Team 0 is reserved for the pig.
-        balls = self.ball_detector.detect(image, playground_polygon)
+        # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
+        balls = self.ball_detector.detect(playground_image, w_H_p)
 
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
         # Output: List of points where the balls are, not necessarily the same size as the corresponding input
-        balls = self._user_adjust_balls(image, balls)
+        # Uses positions in the playground_image!
+        balls = self._user_adjust_balls(playground_image, balls)
 
         # Show result
-        # Input: Original image, list of points where the balls are
+        # Input: Original image, list of points where the balls are in playground_image coordinates
         # Output: Balls and their ranks drawn onto and BGR image
-        result = self._draw_distance_to_pig(image, balls)
+        result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
 
-        utilities.show(result)
+        utilities.show(result, self._win_name)
 
     def _user_adjust_playground(self, image, playground_polygon):
         userdata = {}
@@ -321,38 +339,101 @@ class PetanqueDetection:
 
         return userdata["balls"]
 
-    def _draw_distance_to_pig(self, image, balls):
-        # TODO: Find homography from pixels to real world and measure the distance from each ball to the pig,
-        # then draw a circle and number on top of all balls to indicate what position they are in
-        return image.get_bgr()
+    def _find_homography_w_H_i(self, camera_playground_polygon):
+        w_H_i = cv2.findHomography(np.array(camera_playground_polygon),
+                                   np.array(self.real_world_playground_polygon))[0]
+
+        return w_H_i
+        utilities.show(cv2.warpPerspective(image.get_bgr(), w_H_i, (200,600)))
+
+    def _get_playground_image(self, image, camera_playground_polygon, w_H_i):
+        # Get the bounding rect so we can resize the image down to that size
+        x, y, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
+        image_bgr = image.get_bgr()
+        playground_bgr = image_bgr[y:y+h, x:x+w, :].copy()
+        playground_mask = utilities.poly2mask(camera_playground_polygon, image_bgr)[y:y+h, x:x+w]
+        playground_bgr[np.where(playground_mask == 0)] = 0
+
+        # First make the homography from the playground_image to the image (simple translation)
+        i_H_p = np.array([[1, 0, x], [0, 1, y], [0, 0, 1]])
+        # Then multiply them together to get the homography from the playground_image to real world
+        w_H_p = np.dot(w_H_i, i_H_p)
+
+        return Image(image_data=playground_bgr, color_normalization=False), w_H_p
+
+    def _draw_distance_to_pig(self, image, balls,
+                              w_H_i,
+                              playground_image_to_real_world_homography):
+        """
+        balls should have the coordinates in playground_image coordinates
+        """
+        to_show = image.get_bgr(np.uint8).copy()
+
+        pig_position = None
+        balls_real_world = []
+        for (x, y), team in balls:
+            real_position = np.dot(playground_image_to_real_world_homography,
+                                   np.array([x, y, 1]).reshape((3,1)))
+            real_position /= real_position[2][0]
+
+            # Team 0 is the pig
+            if team == 0:
+                pig_position = (real_position[0][0], real_position[1][0])
+            else:
+                balls_real_world.append(((real_position[0][0], real_position[1][0]), team))
+
+        # Sort the balls by their distance (in the real world) to the pig
+        balls_real_world.sort(key=lambda x: utilities.distance(pig_position, x[0]))
+
+        i_H_w = np.linalg.inv(w_H_i)
+
+        rank = 1
+        for (x_w, y_w), team in balls_real_world:
+            i_pos = np.dot(i_H_w, np.array([x_w, y_w, 1]).reshape((3,1)))
+            i_pos /= i_pos[2][0]
+            x = int(round(i_pos[0][0]))
+            y = int(round(i_pos[1][0]))
+            padding = 2
+            font_face = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1
+            thickness = 1
+            text = str(rank)
+            text_size, _ = cv2.getTextSize(text, font_face, font_scale, thickness)
+            text_size = (int(round(text_size[0])), int(round(text_size[1])))
+
+            cv2.rectangle(to_show, (x-padding, y-text_size[1]-padding), (x+text_size[0]+padding, y+padding), (0, 0, 0), cv2.FILLED)
+            cv2.putText(to_show, text, (x, y), font_face, font_scale, (255, 255, 255), thickness)
+
+            rank += 1
+        return to_show
 
 
 if __name__ == "__main__":
     petanque_detection = PetanqueDetection()
 
-    try:
-        import os
-        filenames = []
-        for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
-            filenames = cur[2]
-            break
+    # try:
+    import os
+    filenames = []
+    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+        filenames = cur[2]
+        break
 
-        filenames.sort()
+    filenames.sort()
 
-        for file in filenames:
-            try:
-                import datetime
-                date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
-                # if date < datetime.datetime(2016, 4, 13, 7, 5):
-                # if date < datetime.datetime(2016, 4, 12, 19, 0):
-                #     continue
-                image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
-            except FileNotFoundError:
-                continue
+    for file in filenames:
+        try:
+            import datetime
+            date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+            # if date < datetime.datetime(2016, 4, 13, 7, 5):
+            # if date < datetime.datetime(2016, 4, 12, 19, 0):
+            #     continue
+            image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
+        except FileNotFoundError:
+            continue
 
-            petanque_detection.detect(image)
+        petanque_detection.detect(image)
 
-    except Exception as e:
-        import traceback
-        print(e)
-        traceback.print_tb(e.__traceback__)
+    # except Exception as e:
+    #     import traceback
+    #     print(e)
+    #     traceback.print_tb(e.__traceback__)

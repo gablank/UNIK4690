@@ -8,7 +8,7 @@ class MinimizeGradientsBallDetector:
         self.petanque_detection = petanque_detection
 
     def detect(self, image, playing_field_polygon):
-        return [((1315, 306), 0), ((850, 762), 1), ((1371, 275), 1), ((1443, 315), 1), ((1185, 403), 2), ((1391, 345), 2), ((1112, 505), 2), ((1358, 519), 1), ((1438, 379), 1), ((1041, 465), 1)]
+        return [((982, 86), 0), ((517, 544), 1), ((1042, 57), 1), ((1114, 100), 1), ((851, 185), 2), ((1060, 126), 2), ((780, 285), 2), ((1027, 300), 1), ((1103, 160), 1), ((711, 247), 1)]
         # works well
         # surf = cv.xfeatures2d.SURF_create(700)
         # img = cv.GaussianBlur(img, (17, 17), 0)
