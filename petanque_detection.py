@@ -7,6 +7,7 @@ import utilities
 import threading
 import time
 import numpy as np
+import math
 
 
 class PetanqueDetection:
@@ -18,14 +19,19 @@ class PetanqueDetection:
         i = image (original image)
         p = playground_image
         w = real world
+    Real world distance units are milli-meters
     """
-    def __init__(self, playground_polygon=((0,600),(0,0),(200,0),(200,600)),
+    def __init__(self, playground_polygon=((0,6000),(0,0),(2000,0),(2000,6000)),
                  PlaygroundDetector=FloodFillPlaygroundDetector,
-                 BallDetector=MinimizeGradientsBallDetector):
+                 BallDetector=MinimizeGradientsBallDetector,
+                 pig_radius=21.0,
+                 ball_radius=35.8):
 
         self.real_world_playground_polygon = playground_polygon
         self.playground_detector = PlaygroundDetector(self)
         self.ball_detector = BallDetector(self)
+        self.pig_radius = pig_radius
+        self.ball_radius = ball_radius
 
         self._mouse_position = None
         self._win_name = "Petanque detector"
@@ -70,7 +76,7 @@ class PetanqueDetection:
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
         # Output: List of points where the balls are, not necessarily the same size as the corresponding input
         # Uses positions in the playground_image!
-        balls = self._user_adjust_balls(playground_image, balls)
+        balls = self._user_adjust_balls(playground_image, balls, w_H_p)
 
         # Show result
         # Input: Original image, list of points where the balls are in playground_image coordinates
@@ -201,7 +207,8 @@ class PetanqueDetection:
 
         return userdata["polygon"]
 
-    def _user_adjust_balls(self, image, balls):
+    def _user_adjust_balls(self, image, balls, w_H_p):
+        p_H_w = np.linalg.inv(w_H_p)
         userdata = {}
         userdata["pressed_idx"] = None
         userdata["mouseover_idx"] = None
@@ -225,6 +232,7 @@ class PetanqueDetection:
                     balls = userdata["balls"].copy()
                     pressed_idx = userdata["pressed_idx"]
                     mouseover_idx = userdata["mouseover_idx"]
+                    cur_mouse_pos = userdata["cur_mouse_pos"]
 
                 bgr = bgr_orig.copy()
 
@@ -235,16 +243,41 @@ class PetanqueDetection:
                 pressed = balls[pressed_idx] if pressed_idx is not None else None
                 mouseover = balls[mouseover_idx] if mouseover_idx is not None else None
 
+                def get_playground_image_radius(playground_position, real_world_radius):
+                    world_pos = np.dot(w_H_p, np.array([playground_position[0], playground_position[1], 1]).reshape((3,1)))
+                    world_pos /= world_pos[2][0]
+                    d_pos = np.dot(w_H_p, np.array([playground_position[0]+10000, playground_position[1], 1]).reshape((3,1)))
+                    d_pos /= d_pos[2][0]
+                    delta_world = d_pos - world_pos
+                    x, y = delta_world[0][0], delta_world[1][0]
+                    # TODO: Check for x == 0
+                    a = y / x
+
+                    new_x = math.sqrt(real_world_radius**2/(a**2 + 1))
+                    new_y = a*new_x
+                    new_x += world_pos[0][0]
+                    new_y += world_pos[1][0]
+                    new_world_pos = np.array([new_x, new_y, 1]).reshape((3,1))
+                    new_screen_pos = np.dot(p_H_w, new_world_pos)
+                    new_screen_pos /= new_screen_pos[2][0]
+
+                    cur_world_pos_numpy = np.array([playground_position[0], playground_position[1], 1]).reshape((3,1))
+                    diff = new_screen_pos - cur_world_pos_numpy
+                    return int(round(math.sqrt(diff[0][0]**2 + diff[1][0]**2)))
+
                 for idx, ball in enumerate(balls):
-                    radius = 7
                     ball_position = ball[0]
                     ball_team = ball[1]
                     color = ball_colors[ball_team]
+                    ball_real_world_radius = self.pig_radius if ball_team == 0 else self.ball_radius
+                    radius = get_playground_image_radius(ball_position, ball_real_world_radius)
+
                     if ball in (mouseover, pressed):
-                        radius = 11
+                        radius *= 1.3
+                        radius = int(round(radius))
                     if pressed == ball:
                         color = pressed_ball_colors[ball_team]
-                    cv2.circle(bgr, ball_position, radius, color, cv2.FILLED)
+                    cv2.circle(bgr, ball_position, radius, color, thickness=2)
 
                 cv2.imshow(self._win_name, bgr)
 
@@ -316,9 +349,10 @@ class PetanqueDetection:
                 pressed_idx = len(balls) - 1 if pressed_idx is not None else None
 
             elif key == 'd':
-                balls.remove(mouseover)
-                mouseover_idx = None
-                pressed_idx = None
+                if mouseover is not None:
+                    balls.remove(mouseover)
+                    mouseover_idx = None
+                    pressed_idx = None
 
             elif key in ('0', '1', '2'):
                 if mouseover is not None:
