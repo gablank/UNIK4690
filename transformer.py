@@ -6,10 +6,10 @@ from image import Image
 import json
 
 
-def discriminatory_power(transform):
-    box = utilities.get_box(transform, utilities.get_middle(transform), 100)
+def discriminatory_power(grayscale):
+    box = utilities.get_box(grayscale, utilities.get_middle(grayscale), 100)
     box_mean, box_std_dev = cv2.meanStdDev(box)
-    all_mean, all_std_dev = cv2.meanStdDev(transform)
+    all_mean, all_std_dev = cv2.meanStdDev(grayscale)
     # Return format is a bit weird ...
     box_var = box_std_dev[0][0]**2
     all_var = all_std_dev[0][0]**2
@@ -18,26 +18,17 @@ def discriminatory_power(transform):
     return (box_mean - all_mean)**2 / box_var
 
 
-def mean_diff(transform, box=None):
+def mean_diff(grayscale, box=None):
     if box is None:
-        box = utilities.get_box(transform, utilities.get_middle(transform), 100)
+        box = utilities.get_box(grayscale, utilities.get_middle(grayscale), 100)
     box_mean, box_std_dev = cv2.meanStdDev(box)
-    all_mean, all_std_dev = cv2.meanStdDev(transform)
+    all_mean, all_std_dev = cv2.meanStdDev(grayscale)
     # print(abs(box_mean - all_mean), 70*box_std_dev**2)
     return abs(box_mean - all_mean) - 70*box_std_dev**2
 
 
-def ball_fitness_func(transform):
+def ball_fitness_func(grayscale):
     return 1.0
-
-
-class Transformation:
-    def __init__(self, coefficients):
-        self.coefficients = coefficients
-
-    def get_transform(self, image):
-        color_spaces = (image.get_bgr(), image.get_hsv(), image.get_lab(), image.get_ycrcb())
-        return utilities.transform_image(color_spaces, self.coefficients)
 
 
 class Transformer:
@@ -48,24 +39,17 @@ class Transformer:
         if filename is not None:
             with open(filename, "r") as f:
                 json_object = json.load(f)
-            self.playground_transformations = list(map(Transformation, json_object["playground_transformations"]))
-            self.ball_transformations = list(map(Transformation, json_object["ball_transformations"]))
+                self.playground_transformations = json_object["playground_transformations"]
+                self.ball_transformations = json_object["ball_transformations"]
 
         else:
-            self.playground_transformations = []
-            for c in initial_playground_transformation_coefficients:
-                self.playground_transformations.append(Transformation(c))
-
-            self.ball_transformations = []
-            for c in initial_ball_transformations_coefficients:
-                self.ball_transformations.append(Transformation(c))
+            self.playground_transformations = initial_playground_transformation_coefficients
+            self.ball_transformations = initial_ball_transformations_coefficients
 
     def save(self, filename):
-        playground_transformation_coefficients = [t.coefficients for t in self.playground_transformations]
-        ball_transformation_coefficients = [t.coefficients for t in self.ball_transformations]
         with open(filename, "w") as f:
-            json.dump({"playground_transformations": playground_transformation_coefficients,
-                        "ball_transformations": ball_transformation_coefficients}, f)
+            json.dump({"playground_transformations": self.playground_transformations,
+                        "ball_transformations": self.ball_transformations}, f)
 
     def get_playground_transformation(self, image):
         """
@@ -73,47 +57,46 @@ class Transformer:
         """
 
         # Sort transformations according to their fitness for this image
-        self.playground_transformations.sort(key=lambda transform: self.playground_fitness_func(transform.get_transform(image)))
+        self.playground_transformations.sort(key=lambda transform: self.playground_fitness_func(utilities.transform_image(image, transform)))
 
         cur_best_transform = self.playground_transformations[-1]
-        cur_best_fitness = self.playground_fitness_func(cur_best_transform.get_transform(image))
+        cur_best_fitness = self.playground_fitness_func(utilities.transform_image(image, cur_best_transform))
 
         # Perform a quick hill climber before returning
         step_size = 0.1
         max_iters = 1
         for _ in range(max_iters):
-                for i in range(len(cur_best_transform.coefficients)):
-                    c1 = cur_best_transform.coefficients.copy()
-                    c2 = cur_best_transform.coefficients.copy()
+                for color_space, coefficient in cur_best_transform.items():
+                    c1 = cur_best_transform.copy()
+                    c2 = cur_best_transform.copy()
 
                     # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
-                    c1[i] += max(0.05, step_size * c1[i])
-                    c2[i] -= max(0.05, step_size * c2[i])
+                    c1[color_space] += max(0.05, step_size * c1[color_space])
+                    c2[color_space] -= max(0.05, step_size * c2[color_space])
 
-                    t1 = Transformation(c1)
-                    t2 = Transformation(c2)
+                    c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
+                    c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
 
-                    t1_fitness = self.playground_fitness_func(t1.get_transform(image))
-                    t2_fitness = self.playground_fitness_func(t2.get_transform(image))
-
-                    if t1_fitness > cur_best_fitness:
-                        cur_best_transform = t1
-                        cur_best_fitness = t1_fitness
+                    if c1_fitness > cur_best_fitness:
+                        cur_best_transform = c1
+                        cur_best_fitness = c1_fitness
                         # break
 
-                    if t2_fitness > cur_best_fitness:
-                        cur_best_transform = t2
-                        cur_best_fitness = t2_fitness
+                    if c2_fitness > cur_best_fitness:
+                        cur_best_transform = c2
+                        cur_best_fitness = c2_fitness
                         # break
 
         # Update the previous best
-        print("Updating transform: {} to {}".format(self.playground_transformations[-1].coefficients, cur_best_transform.coefficients))
-        self.playground_transformations[-1] = cur_best_transform
+        if self.playground_transformations[-1] != cur_best_transform:
+            print("Updating transform: {} to {}".format(self.playground_transformations[-1], cur_best_transform))
+            self.playground_transformations[-1] = cur_best_transform
 
-        return cur_best_transform.get_transform(image)
+        return utilities.transform_image(image, cur_best_transform)
 
     @staticmethod
     def get_light_mask(image):
+        # This function is very rough, and probably doesn't work very well
         grayscale = cv2.cvtColor(image.get_bgr(), cv2.COLOR_BGR2GRAY)
         grayscale = utilities.as_uint8(grayscale)
         grayscale[np.where(grayscale > 240)] = 255
@@ -138,7 +121,8 @@ if __name__ == "__main__":
     # utilities.show(transform)
     # exit(0)
 
-    transformer = Transformer(filename="transformer_state.json")
+
+    transformer = Transformer(filename="playground_transformer_state.json")
 
     try:
         import os
@@ -154,20 +138,30 @@ if __name__ == "__main__":
                 import datetime
                 date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
-                if date < datetime.datetime(2016, 4, 12, 19, 0):
-                    continue
+                # if date < datetime.datetime(2016, 4, 12, 19, 0):
+                #     continue
                 image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
-                # bgr = img.get_bgr()
-                # gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-                # gray = utilities.as_float32(gray)
-                # gray = cv2.blur(gray, (3,3))
-                # grad_x = cv2.Sobel(gray, ddepth=cv2.CV_32F, dx=5, dy=0, ksize=7)
-                # grad_y = cv2.Sobel(gray, ddepth=cv2.CV_32F, dx=0, dy=5, ksize=7)
-                # gradient = cv2.subtract(grad_x, grad_y)
-                # # gradient = cv2.convertScaleAbs(gradient)
-                # utilities.show(gradient, time_ms=30)
+                # color_spaces = image.get_color_space_dict()
+                #
+                # def my_fitness(transform, box=None):
+                #     if box is None:
+                #         box = utilities.get_box(transform, utilities.get_middle(transform), 100)
+                #     box_mean, box_std_dev = cv2.meanStdDev(box)
+                #     all_mean, all_std_dev = cv2.meanStdDev(transform)
+                #     print(abs(box_mean - all_mean), 1/(10000*box_std_dev**2))
+                #     return abs(box_mean - all_mean) + 1/(10000*box_std_dev**2)
+                #     return abs(box_mean - all_mean) - 7000*box_std_dev**2
+                # c = [0] * len(color_spaces)
+                # for idx, space in enumerate(color_spaces):
+                #     fit = my_fitness(space)[0][0]
+                #     c[idx] = fit
+                # print(c)
+                # transform = utilities.transform_image((bgr, hsv, lab, ycrcb), c)
+                # utilities.show(bgr[:,:,0], text=image.filename)
+                # utilities.show(transform, text=image.filename)
                 # continue
-            except:
+
+            except FileNotFoundError:
                 continue
             best_transform = transformer.get_playground_transformation(image)
             import playground_detection
@@ -179,4 +173,4 @@ if __name__ == "__main__":
         print(e)
         traceback.print_tb(e.__traceback__)
     finally:
-        transformer.save("transformer_state.json")
+        transformer.save("playground_transformer_state.json")

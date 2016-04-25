@@ -10,16 +10,12 @@ from utilities import update_metadata
 
 from matplotlib import pyplot as plt
 
-# def imread(filename):
-#     return cv2.imread("images/microsoft_cam/raw/" + filename)
-
-
 
 def apply_mask(img, mask):
     return cv2.bitwise_and(img, img, mask=mask)
 
 if __name__ == "__main__":
-    img_path = "images/series-1/latest.png"
+    img_path = utilities.locate_file("latest.png")
     img = cv2.imread(img_path)
     meta = read_metadata(img_path)
 
@@ -61,6 +57,6 @@ if __name__ == "__main__":
     box_size = 60
     utilities.plot_histogram(
         utilities.get_box(hue, (int(hue.shape[0] / 2), int(hue.shape [1] / 2)), box_size),
-        color="b", max=256)
+        colors="b", max=256)
 
     plt.show()

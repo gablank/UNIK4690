@@ -17,6 +17,7 @@ def get_middle(img):
     mid_y = int(round(img.shape[0] / 2, 0))
     return (mid_x, mid_y)
 
+
 def draw_label(to_show, text):
     """
     Draw a label with defaults (position, etc.) that should work in most cases
@@ -30,6 +31,7 @@ def draw_label(to_show, text):
 
     cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
+
 
 def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False):
     """
@@ -75,11 +77,13 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
     return chr(key%256)
 
 
-def get_box(img, center, side):
+def get_box(img, center=None, side=100):
     """
     P: (x,y)
     Get a square with side lengths side centered on center
     """
+    if center is None:
+        center = get_middle(img)
     first_side = int(round(side / 2, 0))
     second_side = side - first_side
     return img[center[1]-first_side:center[1]+second_side, center[0]-first_side:center[0]+second_side]
@@ -134,6 +138,7 @@ def draw_convex_hull(img, convex_hull):
         cv2.line(copy, pt1, pt2, color, 3)
     return copy
 
+
 def poly2mask(poly, size_or_img):
     size = size_or_img if type(size_or_img) != np.ndarray else size_or_img.shape[0:2]
     mask = np.zeros(size, dtype=np.uint8)
@@ -141,6 +146,7 @@ def poly2mask(poly, size_or_img):
         poly = np.array(poly)
     cv2.fillPoly(mask, [poly], 255)
     return mask
+
 
 def wait_for_key(char=None):
     while(True):
@@ -152,6 +158,7 @@ def wait_for_key(char=None):
             return chr(key_code)
         elif key_code == ord(char):
             return chr(key_code)
+
 
 def select_polygon(orig_img):
     """
@@ -184,32 +191,158 @@ def select_polygon(orig_img):
     cv2.destroyWindow("polygon-select")
     return polygon
 
+def select_circles(img):
+    """
+    Interactively select a number of circles. Add center with LB and approx. radius with
+    LB again. Then adjust position and radius with the keyboard.
+    Return a list of the circles. Each represented by a tuple: ((cx, cy), r)
+    """
+    orig_img = img.copy()
+    canvas = orig_img.copy()
+
+    circles = []
+    center = None
+    color = (0,0,255)
+    # Make drag image (in qt viewer) work without triggering clicks:
+    mouse_moved_flag = False 
+
+    message = ""
+
+    def draw(canvas, center, r):
+        cv2.circle(canvas, center, r, color, 1)
+
+    def redraw(canvas):
+        draw_label(canvas, message)
+        for center, r in circles:
+            draw(canvas, center, r)
+        return canvas
+
+    def mouse_callback(ev, x, y, flags, param):
+        nonlocal canvas
+        nonlocal center
+        nonlocal mouse_moved_flag
+
+        canvas = redraw(orig_img.copy())
+
+        r = round(math.sqrt((center[0]-x)**2 + (center[1]-y)**2) if center else 0)
+
+        if ev == cv2.EVENT_LBUTTONDOWN:
+            mouse_moved_flag = False
+        elif ev == cv2.EVENT_LBUTTONUP and not mouse_moved_flag:
+            if not center:
+                center = (x,y)
+            else:
+                circles.append((center, r))
+                draw(canvas, center, r)
+                center = None
+        elif ev == cv2.EVENT_MOUSEMOVE:
+            mouse_moved_flag = True
+            if not center:
+                pass
+            else:
+                draw(canvas, center, r)
+
+        cv2.imshow("circles-select", canvas)
+        
+    cv2.namedWindow("circles-select")
+    cv2.setMouseCallback("circles-select", mouse_callback)
+    cv2.imshow("circles-select", orig_img)
+
+    # Over-engineering ftw :) (This might make sense for arbitrary rectange selections though)
+    state_labels = ['Move (jkli)', 'Grow/Shrink (jl)']
+    state_transforms = [
+        lambda x,y,r,dx,dy: ((x+dx, y+dy), r),
+        lambda x,y,r,dr,_:  ((x, y), r+dr),
+    ]
+    state = 0
+    active_transform = state_transforms[state]
+    # message = state_labels[state]
+    message = 'Move (jkli), Grow/Shrink (ed), Done (s), Quit (q)'
+    while True:
+        key = wait_for_key()
+        if key == 'u':
+            circles.pop()
+        elif key == 'n' and False:
+            state = (state + 1) % len(state_labels)
+            active_transform = state_transforms[state]
+            message = state_labels[state]
+        elif key == 's':
+            break
+        elif key == 'q':
+            exit(0)
+
+        if len(circles) > 0:
+            cur = circles[-1]
+            args = (*cur[0], cur[1])
+            new_circle = None
+            if key == 'j':
+                new_circle = active_transform(*args, -1,  0)
+            elif key == 'l':
+                new_circle = active_transform(*args,  1,  0)
+            elif key == 'i':
+                new_circle = active_transform(*args,  0, -1)
+            elif key == 'k':
+                new_circle = active_transform(*args,  0,  1)
+            elif key == 'e':
+                new_circle = (cur[0],cur[1]+1) # radius
+            elif key == 'd':
+                new_circle = (cur[0],cur[1]-1) # radius
+
+            if new_circle:
+                circles[-1] = new_circle
+
+        cv2.imshow("circles-select", redraw(orig_img.copy()))
+
+    cv2.destroyWindow("circles-select")
+    return circles
+
+
+def two_point_rect_to_bb(p1, p2):
+    """
+    Converts a rectangle represented by two points to a bounding box: a (x,y,w,h) tuple
+    1----+    2----o    +----2    +----1      +-w--*
+    |    | or |    | or |    | or |    | ->   h    |
+    +----2    o----1    1----*    2----*    (x,y)--*
+    """
+    x = min(p1[0], p2[0])
+    y = min(p1[1], p2[1])
+    w = abs(p1[0] - p2[0])
+    h = abs(p1[1] - p2[1])
+    return (x, y, w, h)
+
+
 from matplotlib import pyplot as plt
 def plot_histogram(img, channels=[0], mask=None, colors=["b", "g", "r"], max=None):
     """
     Adds the histogram to the active matplotlib plot. Use plt.show() after to show the plot.
     """
+    if(type(colors) == str):
+        colors=[colors]
     max = np.max(img)+0.00001 if max is None else max
     for idx, ch in enumerate(channels):
         hist = cv2.calcHist([img], [ch], mask, [256], [0, max])
         hist = hist/sum(hist) # normalize so each bucket represents percentage of total pixels
         plt.plot(hist, colors[idx])
 
-
 def get_histogram(single_channel_img):
     single_channel_img = as_uint8(single_channel_img)
     return cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
 
 
-def draw_histogram(single_channel_img, max_height=256, padding=2):
+def draw_histogram(single_channel_img, max_height=256, padding=2,
+                   ignored_values=[], fg=0, bg=255, mask=None):
     """
     Get an image of the histogram (to be painted onto other images etc)
     """
     single_channel_img = as_uint8(single_channel_img)
-    hist = cv2.calcHist([single_channel_img], [0], None, [256], [0, 256])
+    hist = cv2.calcHist([single_channel_img], [0], mask, [256], [0, 256])
 
-    hist_img = np.ones((max_height+2*padding, 256 + 2*padding))
-    hist_img = as_uint8(hist_img)
+    value_type = np.uint8
+    if type(fg) != int or type(bg) != int:
+        value_type = np.float32
+
+    hist[ignored_values] = 0
+    hist_img = np.ones((max_height+2*padding, 256 + 2*padding), dtype=value_type)*bg
     hist /= np.amax(hist)
     hist *= max_height
 
@@ -219,18 +352,23 @@ def draw_histogram(single_channel_img, max_height=256, padding=2):
         pt1 = (padding+x, padding + max_height-y)
         pt2 = (padding+x, padding + max_height-1)
 
-        cv2.line(hist_img, pt1, pt2, (0, 0, 0))
+        cv2.line(hist_img, pt1, pt2, (fg))
     return hist_img
+
 
 def get_metadata_path(img_path):
     img_name = os.path.basename(img_path)
-    img_base = "".join(img_name.split(".")[:-1])
-    img_dir = os.path.dirname(img_path)
+    img_dir = img_path
+    is_dir_path = img_name.find(".") < 0
+    if not is_dir_path:
+        img_base = "".join(img_name.split(".")[:-1])
+        img_dir = os.path.dirname(img_path)
     series_metadata_path = os.path.join(img_dir, "metadata.json")
-    if os.path.exists(series_metadata_path):
+    if is_dir_path or os.path.exists(series_metadata_path):
         return series_metadata_path
     else:
         return os.path.join(img_dir, img_base+".json")
+
 
 def read_metadata(img_path):
     metadata_path = get_metadata_path(img_path)
@@ -241,57 +379,29 @@ def read_metadata(img_path):
     else:
         return {}
 
+
 def update_metadata(img_path, new_meta_data):
     meta_dict = read_metadata(img_path)
     meta_dict.update(new_meta_data)
     metadata_path = get_metadata_path(img_path)
     with open(metadata_path, "w") as fp:
-        json.dump(meta_dict, fp)
+        json.dump(meta_dict, fp) # overwrites on error too... 
     return meta_dict
 
 
-def transform_image(img_spaces, vec):
+def transform_image(image, vec):
     """
-    Return a list of transformations that have previously worked well
-    The factor for b is always 1
-    :param img_spaces: tuple of image spaces: (bgr, hsv, lab, YCrCb)
+    :param image: Image object
+    :param vec: dict where keys = 1D color space (with preceding image space name: bgr_b, bgr_g etc.), and the value
+    is the coefficient to multiply that color space by
     """
-    bgr, hsv, lab, ycrcb = img_spaces
+    transformed = None
 
-    transformed = np.zeros(bgr.shape[:2])
+    for image_space_name, image_space_data in image.get_color_space_dict().items():
+        if transformed is None:
+            transformed = np.zeros(image_space_data.shape[:2])
 
-    idx = 0
-    b, g, r = bgr[:,:,0], bgr[:,:,1], bgr[:,:,2]
-    transformed += vec[idx] * b
-    idx += 1
-    transformed += vec[idx] * g
-    idx += 1
-    transformed += vec[idx] * r
-    idx += 1
-
-    h, s, v = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
-    # transformed += vec[idx] * h
-    # idx += 1
-    transformed += vec[idx] * s
-    idx += 1
-    transformed += vec[idx] * v
-    idx += 1
-
-    l, a, b = lab[:,:,0], lab[:,:,1], lab[:,:,2]
-    transformed += vec[idx] * l
-    idx += 1
-    transformed += vec[idx] * a
-    idx += 1
-    transformed += vec[idx] * b
-    idx += 1
-
-    y, cr, cb = ycrcb[:,:,0], ycrcb[:,:,1], ycrcb[:,:,2]
-    transformed += vec[idx] * y
-    idx += 1
-    transformed += vec[idx] * cr
-    idx += 1
-    transformed += vec[idx] * cb
-    idx += 1
+        transformed += vec[image_space_name] * image_space_data
 
     # Normalization
     res = transformed - np.amin(transformed)
@@ -301,6 +411,7 @@ def transform_image(img_spaces, vec):
 
 
 def as_uint8(img):
+    img = img.copy()
     if img.dtype == np.uint8:
         return img
 
@@ -308,13 +419,14 @@ def as_uint8(img):
         raise RuntimeError("Unknown dtype: {}".format(img.dtype))
 
     img -= np.amin(img)
-    img /= np.amax(img)
+    img *= 1/np.amax(img)
     img *= 255
     img = np.around(img)
     return img.astype(np.uint8)
 
 
 def as_float32(img):
+    img = img.copy()
     if img.dtype in (np.float32, np.float64):
         return img.astype(np.float32) / np.amax(img)
 
@@ -417,6 +529,13 @@ def show_all(image, time_ms=0):
 
     return show(to_show, time_ms=time_ms, fullscreen=True)
 
+
+def distance(pt1, pt2):
+    """
+    Euclidean distance from pt1 to pt2
+    """
+    import math
+    return math.sqrt((pt1[0]-pt2[0])**2 + (pt1[1]-pt2[1])**2)
 
 
 if __name__ == "__main__":
