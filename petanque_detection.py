@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
+from playground_detection.manual_playground_detector import ManualPlaygroundDetector
 from image import Image
 import cv2
 import utilities
@@ -8,6 +9,7 @@ import threading
 import time
 import numpy as np
 import math
+import os
 
 
 class PetanqueDetection:
@@ -193,6 +195,14 @@ class PetanqueDetection:
                     polygon = polygon[mouseover_idx:] + polygon[:mouseover_idx]
                     mouseover_idx = 0
                     pressed_idx = 0 if pressed_idx is not None else None
+            elif key == 'd':
+                if image.path:
+                    # Assume image serie
+                    utilities.update_metadata(os.path.dirname(image.path), {"playground_poly": polygon})
+            elif key == 'l':
+                metadata = image.get_metadata()
+                if "playground_poly" in metadata:
+                    polygon = [tuple(coord) for coord in metadata["playground_poly"]]
 
             with userdata["lock"]:
                 userdata["run"] = run
@@ -455,6 +465,9 @@ if __name__ == "__main__":
     filenames.sort()
 
     for file in filenames:
+        if not file.endswith(".png"):
+            continue
+
         try:
             import datetime
             date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
