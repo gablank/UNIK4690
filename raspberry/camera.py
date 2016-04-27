@@ -109,10 +109,8 @@ class Camera:
         }[cv2_property]
 
     def set_resolution(self, width, height):
-        self._call(_v4l2_cmd,
-                   _v4l2_select_device,
-                   _camera_device.format(self.camera_idx),
-                   _set_frame_size_cmd.format(width, height))
+        self.cap.set(3, width)
+        self.cap.set(4, height)
 
         new_w, new_h = self.get_resolution()
         if (new_w, new_h) != (width, height):
