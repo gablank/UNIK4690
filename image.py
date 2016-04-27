@@ -48,6 +48,10 @@ class Image:
     def get_bgr(self, dtype=np.float32):
         return utilities.astype(self.bgr, dtype)
 
+    def get_gray(self, dtype=np.float32):
+        img = cv2.cvtColor(self.bgr, cv2.COLOR_BGR2GRAY)
+        return utilities.astype(img, dtype)
+
     def get_hsv(self, dtype=np.float32):
         if self.hsv is None:
             self.hsv = cv2.cvtColor(self.bgr, cv2.COLOR_BGR2HSV)
