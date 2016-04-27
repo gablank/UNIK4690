@@ -8,7 +8,6 @@ import cv2
 class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/new_image.png":
-            print("received request")
             with camera.Camera() as cam:
                 bgr = cam.capture()
 
