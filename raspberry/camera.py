@@ -54,9 +54,9 @@ class Camera:
     def set_defaults(self):
         self.set(FRAME_WIDTH, 1920)
         self.set(FRAME_HEIGHT, 1080)
-        self.set(BRIGHTNESS, 0.3)
+        self.set(BRIGHTNESS, 110)
         self.set(CONTRAST, 5)
-        self.set(SATURATION, 0.5)
+        self.set(SATURATION, 100)
         self.set(WHITE_BALANCE_TEMPERATURE_AUTO, 0)
         self.set(WHITE_BALANCE_TEMPERATURE, 5000)
         self.set(SHARPNESS, 50)
@@ -64,7 +64,7 @@ class Camera:
         self.set(EXPOSURE_AUTO, 1)  # Not a bool, but mapping. 1 means manual, 3 is auto
         self.set(EXPOSURE, 1)
         self.set(FOCUS_AUTO, 0)
-        self.set(FOCUS, 0.05)
+        self.set(FOCUS, 0)
         self.set(ZOOM, 0)
 
     def set(self, property, value):
