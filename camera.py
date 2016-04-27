@@ -10,9 +10,8 @@ _get_property_cmd = "--get-ctrl={}"
 _set_property_cmd = "--set-ctrl={}={}"
 _list_devices_cmd = "--list-devices"
 _set_frame_size_cmd = "--try-fmt-video=width={}height={}"
+_get_frame_size_cmd = "--get-fmt-video"
 
-FRAME_WIDTH, \
-FRAME_HEIGHT, \
 BRIGHTNESS, \
 CONTRAST, \
 SATURATION, \
@@ -33,9 +32,9 @@ class Camera:
         if camera_idx is None:
             camera_idx = self._detect_microsoft_lifecam()
             if camera_idx is None:
-                raise RuntimeError("Unable to detect Microsoft® LifeCam Studio(TM)!")
+                raise RuntimeError(u"Unable to detect Microsoft® LifeCam Studio(TM)!")
 
-            print("Found Microsoft® LifeCam Studio(TM) at {}".format(_camera_device.format(camera_idx)))
+            print(u"Found Microsoft® LifeCam Studio(TM) at {}".format(_camera_device.format(camera_idx)))
 
         self.cap = cv2.VideoCapture(camera_idx)
 
@@ -44,19 +43,18 @@ class Camera:
 
         self.camera_idx = camera_idx
 
-        self._frame_width = 1920
-        self._frame_height = 1080
+        self._frame_width = None
+        self._frame_height = None
         self.set_defaults()
 
     def capture(self):
         return self.cap.read()[1]
 
     def set_defaults(self):
-        self.set(FRAME_WIDTH, 1920)
-        self.set(FRAME_HEIGHT, 1080)
-        self.set(BRIGHTNESS, 0.3)
+        self.set_resolution(self._frame_width, self._frame_height)
+        self.set(BRIGHTNESS, 110)
         self.set(CONTRAST, 5)
-        self.set(SATURATION, 0.5)
+        self.set(SATURATION, 100)
         self.set(WHITE_BALANCE_TEMPERATURE_AUTO, 0)
         self.set(WHITE_BALANCE_TEMPERATURE, 5000)
         self.set(SHARPNESS, 50)
@@ -64,45 +62,35 @@ class Camera:
         self.set(EXPOSURE_AUTO, 1)  # Not a bool, but mapping. 1 means manual, 3 is auto
         self.set(EXPOSURE, 1)
         self.set(FOCUS_AUTO, 0)
-        self.set(FOCUS, 0.05)
+        self.set(FOCUS, 0)
         self.set(ZOOM, 0)
 
     def set(self, property, value):
-        if property == FRAME_WIDTH:
-            self._set_resolution(value, self._frame_height)
-        elif property == FRAME_HEIGHT:
-            self._set_resolution(self._frame_width, value)
-        else:
-            property_string, low, high = self._property_to_string(property)
-            if low > value or high < value:
-                raise ValueError("Value is outside of property range: {} <= {} <= {}".format(low, property_string, high))
+        property_string, low, high = self._property_to_string(property)
+        if low > value or high < value:
+            raise ValueError("Value is outside of property range: {} <= {} <= {}".format(low, property_string, high))
 
-            self._call(_v4l2_cmd,
-                       _v4l2_select_device,
-                       _camera_device.format(self.camera_idx),
-                       _set_property_cmd.format(property_string, value))
+        self._call(_v4l2_cmd,
+                   _v4l2_select_device,
+                   _camera_device.format(self.camera_idx),
+                   _set_property_cmd.format(property_string, value))
 
         for _ in range(20):
             pass
             #self.capture()
 
     def get(self, property):
-        if property == FRAME_WIDTH:
-            return self._frame_width
-        elif property == FRAME_HEIGHT:
-            return self._frame_height
-        else:
-            property_as_string = self._property_to_string(property)[0]
+        property_as_string = self._property_to_string(property)[0]
 
-            output = self._call(_v4l2_cmd,
-                                _v4l2_select_device,
-                                _camera_device.format(self.camera_idx),
-                                _get_property_cmd.format(property_as_string))
+        output = self._call(_v4l2_cmd,
+                            _v4l2_select_device,
+                            _camera_device.format(self.camera_idx),
+                            _get_property_cmd.format(property_as_string))
 
-            output = output.split("\n")[0].strip()
-            colon_position = output.find(":")
-            value = output[colon_position+1:]
-            return int(value)
+        output = output.split("\n")[0].strip()
+        colon_position = output.find(":")
+        value = output[colon_position+1:]
+        return int(value)
 
     def _property_to_string(self, cv2_property):
         return {
@@ -120,12 +108,21 @@ class Camera:
             ZOOM: ("zoom_absolute", 0, 317),
         }[cv2_property]
 
+    def set_resolution(self, width, height):
+        self._call(_v4l2_cmd,
+                   _v4l2_select_device,
+                   _camera_device.format(self.camera_idx),
+                   _set_frame_size_cmd.format(width, height))
 
-    def _set_resolution(self, width, height):
+        new_w, new_h = self.get_resolution()
+        if (new_w, new_h) != (width, height):
+            raise RuntimeError("Unable to set resolution!")
+
+    def get_resolution(self):
         output = self._call(_v4l2_cmd,
                             _v4l2_select_device,
                             _camera_device.format(self.camera_idx),
-                            _set_frame_size_cmd.format(width, height))
+                            _get_frame_size_cmd)
 
         output = output.split("\n")
         resolution_line = None
@@ -138,6 +135,8 @@ class Camera:
             resolution = resolution_line[colon_position+1:].split("/")
             self._frame_width, self._frame_height = int(resolution[0].strip()), int(resolution[1].strip())
 
+        return self._frame_width, self._frame_height
+
     def _detect_microsoft_lifecam(self):
         output = self._call(_v4l2_cmd, _list_devices_cmd)
 
@@ -148,7 +147,7 @@ class Camera:
                 dev_str = line_str
                 break
 
-            if line_str.find("Microsoft® LifeCam Studio(TM)") >= 0:
+            if line_str.find(u"Microsoft® LifeCam Studio(TM)") >= 0:
                 lifecam = True
 
         if not lifecam:
@@ -171,17 +170,19 @@ class Camera:
 
     def __str__(self):
         camera_device = _camera_device.format(self.camera_idx)
+        self.get_resolution()
         print("Camera read from: {}".format(camera_device))
         print("Camera settings:")
-        print("Resolution: {}x{}".format(self.get(cv2.CAP_PROP_FRAME_WIDTH), self.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        print("Saturation:", self.get(cv2.CAP_PROP_SATURATION))
-        print("Auto exposure:", self.get(cv2.CAP_PROP_AUTO_EXPOSURE))
-        print("Exposure:", self.get(cv2.CAP_PROP_EXPOSURE))
-        print("Auto focus:", self.get(cv2.CAP_PROP_AUTOFOCUS))
-        print("Focus:", self.get(cv2.CAP_PROP_FOCUS))
-        print("Brightness:", self.get(cv2.CAP_PROP_BRIGHTNESS))
-        print("Sharpness:", self.get(cv2.CAP_PROP_SHARPNESS))
-        print("White balance:", self.get(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U))
+        print("Resolution: {}x{}".format(self._frame_width, self._frame_height))
+        print("Saturation:", self.get(SATURATION))
+        print("Auto exposure:", self.get(EXPOSURE_AUTO))
+        print("Exposure:", self.get(EXPOSURE))
+        print("Auto focus:", self.get(FOCUS_AUTO))
+        print("Focus:", self.get(FOCUS))
+        print("Brightness:", self.get(BRIGHTNESS))
+        print("Sharpness:", self.get(SHARPNESS))
+        print("Auto white balance:", self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
+        print("White balance:", self.get(WHITE_BALANCE_TEMPERATURE))
 
 
 if __name__ == "__main__":
