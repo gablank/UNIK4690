@@ -9,7 +9,7 @@ _camera_device = "/dev/video{}"
 _get_property_cmd = "--get-ctrl={}"
 _set_property_cmd = "--set-ctrl={}={}"
 _list_devices_cmd = "--list-devices"
-_set_frame_size_cmd = "--try-fmt-video=width={}height={}"
+_set_frame_size_cmd = "--set-fmt-video=width={},height={}"
 _get_frame_size_cmd = "--get-fmt-video"
 
 BRIGHTNESS, \
@@ -51,7 +51,7 @@ class Camera:
         return self.cap.read()[1]
 
     def set_defaults(self):
-        self.set_resolution(self._frame_width, self._frame_height)
+        self.set_resolution(1920, 1080)
         self.set(BRIGHTNESS, 110)
         self.set(CONTRAST, 5)
         self.set(SATURATION, 100)
