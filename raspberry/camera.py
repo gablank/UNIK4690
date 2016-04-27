@@ -33,9 +33,9 @@ class Camera:
         if camera_idx is None:
             camera_idx = self._detect_microsoft_lifecam()
             if camera_idx is None:
-                raise RuntimeError("Unable to detect Microsoft® LifeCam Studio(TM)!")
+                raise RuntimeError(u"Unable to detect Microsoft® LifeCam Studio(TM)!")
 
-            print("Found Microsoft® LifeCam Studio(TM) at {}".format(_camera_device.format(camera_idx)))
+            print(u"Found Microsoft® LifeCam Studio(TM) at {}".format(_camera_device.format(camera_idx)))
 
         self.cap = cv2.VideoCapture(camera_idx)
 
@@ -148,7 +148,7 @@ class Camera:
                 dev_str = line_str
                 break
 
-            if line_str.find("Microsoft® LifeCam Studio(TM)") >= 0:
+            if line_str.find(u"Microsoft® LifeCam Studio(TM)") >= 0:
                 lifecam = True
 
         if not lifecam:
