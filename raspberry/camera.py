@@ -48,6 +48,9 @@ class Camera:
         self.set_defaults()
 
     def capture(self):
+        # Make sure any new settings have been applied
+        for _ in range(8):
+            self.cap.read()
         return self.cap.read()[1]
 
     def set_defaults(self):
@@ -74,10 +77,6 @@ class Camera:
                    _v4l2_select_device,
                    _camera_device.format(self.camera_idx),
                    _set_property_cmd.format(property_string, value))
-
-        for _ in range(20):
-            pass
-            #self.capture()
 
     def get(self, property):
         property_as_string = self._property_to_string(property)[0]
@@ -169,18 +168,20 @@ class Camera:
     def __str__(self):
         camera_device = _camera_device.format(self.camera_idx)
         self.get_resolution()
-        print("Camera read from: {}".format(camera_device))
-        print("Camera settings:")
-        print("Resolution: {}x{}".format(self._frame_width, self._frame_height))
-        print("Saturation:", self.get(SATURATION))
-        print("Auto exposure:", self.get(EXPOSURE_AUTO))
-        print("Exposure:", self.get(EXPOSURE))
-        print("Auto focus:", self.get(FOCUS_AUTO))
-        print("Focus:", self.get(FOCUS))
-        print("Brightness:", self.get(BRIGHTNESS))
-        print("Sharpness:", self.get(SHARPNESS))
-        print("Auto white balance:", self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
-        print("White balance:", self.get(WHITE_BALANCE_TEMPERATURE))
+        as_str = "Camera read from: {}\n".format(camera_device)
+        as_str += "Camera settings:\n"
+        as_str += "Resolution: {}x{}\n".format(self._frame_width, self._frame_height)
+        as_str += "Saturation: {}\n".format(self.get(SATURATION))
+        as_str += "Auto exposure: {}\n".format(self.get(EXPOSURE_AUTO))
+        as_str += "Exposure: {}\n".format(self.get(EXPOSURE))
+        as_str += "Auto focus: {}\n".format(self.get(FOCUS_AUTO))
+        as_str += "Focus: {}\n".format(self.get(FOCUS))
+        as_str += "Brightness: {}\n".format(self.get(BRIGHTNESS))
+        as_str += "Sharpness: {}\n".format(self.get(SHARPNESS))
+        as_str += "Auto white balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
+        as_str += "White balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE))
+
+        return as_str
 
 
 if __name__ == "__main__":
