@@ -7,8 +7,12 @@ import cv2
 
 class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/new_image.png":
+        if self.path.find("/new_image.png") >= 0:
+            exposure_pos = self.path.find("&exposure=")
+            exposure = self.path[exposure_pos+len("&exposure="):]
+
             with camera.Camera() as cam:
+                cam.set(camera.EXPOSURE, exposure)
                 bgr = cam.capture()
 
             cv2.imwrite("image.png", bgr)
@@ -29,5 +33,3 @@ if __name__ == "__main__":
         traceback.print_tb(e.__traceback__)
     finally:
         server.server_close()
-
-
