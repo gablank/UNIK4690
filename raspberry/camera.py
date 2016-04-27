@@ -24,7 +24,7 @@ EXPOSURE, \
 FOCUS_AUTO, \
 FOCUS, \
 ZOOM \
-    = range(14)
+    = range(12)
 
 
 class Camera:
