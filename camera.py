@@ -135,8 +135,8 @@ class Camera:
                 break
         if resolution_line is not None:
             colon_position = resolution_line.find(":")
-            resolution = resolution_line[colon_position:].split("/")
-            self._frame_width, self._frame_height = int(resolution[0]), int(resolution[1])
+            resolution = resolution_line[colon_position+1:].split("/")
+            self._frame_width, self._frame_height = int(resolution[0].strip()), int(resolution[1].strip())
 
     def _detect_microsoft_lifecam(self):
         output = self._call(_v4l2_cmd, _list_devices_cmd)
