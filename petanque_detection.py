@@ -2,6 +2,7 @@
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
 from playground_detection.manual_playground_detector import ManualPlaygroundDetector
+from ball_detection.hough import HoughBallDetector
 from image import Image
 import cv2
 import utilities
@@ -453,7 +454,10 @@ class PetanqueDetection:
 
 
 if __name__ == "__main__":
-    petanque_detection = PetanqueDetection()
+    # petanque_detection = PetanqueDetection()
+    petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
+                                           BallDetector=HoughBallDetector
+    )
 
     # try:
     import os
