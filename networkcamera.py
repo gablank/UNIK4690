@@ -72,13 +72,8 @@ class NetworkCamera(camera.Camera):
 
 if __name__ == "__main__":
     with NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
-        cam.set(camera.BRIGHTNESS, 30)
-        e = [1,2,4,5,9,10,19]
-        i = 0
         while True:
-            cam.set(camera.EXPOSURE, e[i])
             import utilities
             frame = cam.capture()
-
-            utilities.show_all(frame, time_ms=0)
-            i = (i+1) % len(e)
+            import image
+            utilities.show_all(image.Image(image_data=frame), time_ms=0)
