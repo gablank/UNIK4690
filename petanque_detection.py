@@ -454,18 +454,25 @@ if __name__ == "__main__":
 
     filenames.sort()
 
-    for file in filenames:
-        try:
-            import datetime
-            date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
-            # if date < datetime.datetime(2016, 4, 13, 7, 5):
-            # if date < datetime.datetime(2016, 4, 12, 19, 0):
-            #     continue
-            image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
-        except FileNotFoundError:
-            continue
+    try:
+        for file in filenames:
+            try:
+                import datetime
+                date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+                # if date < datetime.datetime(2016, 4, 13, 7, 5):
+                # if date < datetime.datetime(2016, 4, 12, 19, 0):
+                #     continue
+                image = Image(file, color_normalization=False)
+            except FileNotFoundError:
+                continue
+            except ValueError:
+                continue
 
-        petanque_detection.detect(image)
+            petanque_detection.detect(image)
+    except Exception as e:
+        print(e)
+    finally:
+        petanque_detection.playground_detector.transformer.save(filename="playground_transformer_state.json")
 
     # except Exception as e:
     #     import traceback
