@@ -4,6 +4,7 @@ import numpy as np
 import math
 import json
 import os
+from glob import glob
 import time
 from math import ceil
 import utilities
@@ -170,6 +171,9 @@ def to_gray(img):
 def to_hsv(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
+def to_ycrcb(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+
 to_gray_op = lambda: Operation("to gray", to_gray)
 
 def pick_channel(img, ch):
@@ -279,8 +283,9 @@ def set_params(pipeline, op_param_map):
     Accepts the output dumped from the gui
     """
     for op in pipeline:
-        op.params = op_param_map[op.name]
-        return pipeline
+        if op.name in op_param_map:
+            op.params = op_param_map[op.name]
+    return pipeline
 
 
 
@@ -415,22 +420,103 @@ warp_pipeline = [
 
 
 def hough(img, min_radius, max_radius, p1, p2):
+    if max_radius == 0: # hack to disable since it's sometimes very expensive
+        return img
     circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20, param1=p1, param2=p2, minRadius=min_radius, maxRadius=max_radius)
 
     grayscale = img.copy()
+    grayscale = cv2.cvtColor(grayscale, cv2.COLOR_GRAY2BGR)
+
     if circles is not None:
         circles = np.uint16(np.around(circles))
         for i in circles[0,:]:
             # draw the outer circle
-            cv2.circle(grayscale,(i[0],i[1]),i[2],(0,255,0),2)
+            cv2.circle(grayscale,(i[0],i[1]),i[2],(0,255,0),3)
             # draw the center of the circle
             cv2.circle(grayscale,(i[0],i[1]),2,(0,0,255),3)
 
     return grayscale
 
-hough_op = lambda: Operation("hough", hough, {"min_radius": (5, (1, 50)), "max_radius": (22, (1, 50)),
+hough_op = lambda: Operation("hough", hough, {"min_radius": (5, (1, 50)), "max_radius": (0, (0, 50)),
                                               "p1": (10, (1, 500)), "p2": (10, (1, 500))})
 
+playing_balls_pipeline = set_params([to_gray_op(), blur_op(), hough_op()],
+                                   {
+                                       "blur": {'size': 11},
+                                       "hough": {'p1': 57, 'p2': 8, 'min_radius': 5, 'max_radius': 14},
+                                   })
+
+def marker_ball_transform(img, exponent=1):
+    Y = img[:,:,1]
+    Y_f = Y.astype(np.float32)
+    Y_f *= 1./255
+
+    Yp = np.power(Y_f, exponent)
+
+    amax = np.amax(Yp)
+    light = Yp / amax
+    light *= 255
+    light = np.clip(light, 0, 255)
+    light = light.astype(np.uint8)
+
+    return light
+
+
+    return img[:,:,1]
+    utilities.show(img[:,:,1])
+    img = img.astype(np.float32)
+    img = img[:,:,1] + img[:,:,0]
+    utilities.show(img)
+    print(img.shape)
+    img = np.round(img / np.max(img))
+    img = img.astype(np.uint8)
+    return img
+
+def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blobColor = 255):
+    # Use hue and saturation
+    lightBlobParams = cv2.SimpleBlobDetector_Params()
+    lightBlobParams.filterByArea = True
+    lightBlobParams.minArea = minArea
+    lightBlobParams.maxArea = maxArea
+    lightBlobParams.minDistBetweenBlobs = minDistBetweenBlobs
+    lightBlobParams.blobColor = blobColor
+    lightBlobParams.filterByColor = False
+    lightBlobParams.filterByConvexity = False
+    lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
+
+    # out = np.array((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+    kpLight = lightBlobDetector.detect(img)
+    out = cv2.drawKeypoints(img, kpLight, None, color=[0, 0, 255])
+    return out
+
+
+marker_balls_pipeline2 = set_params(
+    [
+        # pick_channel_op(),
+        Operation("trans", marker_ball_transform, {"exponent": (1, (1.0, 10.0))}),
+        Operation("blob", blob_detector, {
+            "minArea": (10, (0,500)),
+            "maxArea": (500, (0,1000)),
+            "minDistBetweenBlobs": (100, (0,1000)),
+            "blobColor" : (255, (0,255))
+        }),
+    ],
+    {})
+
+marker_balls_pipeline1 = set_params(
+    [pick_channel_op(),
+     blur_op(),
+     threshold_op(),
+     hough_op(),
+    ],
+    {
+        "pick_channel": {'ch': 1},
+        "blur": {'size': 11},
+        "threshold": {'t': 86},
+        "hough": {'p2': 10, 'max_radius': 24, 'p1': 10, 'min_radius': 4},
+    }
+)
+                                   
 if __name__ == '__main__':
 
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png",
@@ -444,11 +530,16 @@ if __name__ == '__main__':
     images = [i for i in images if i is not None]
 
     base_dir = "images/microsoft_cam/24h/south/"
-    metadata = utilities.read_metadata(base_dir)
 
     A = [ "2016-04-12_18:59:03.png", "2016-04-12_19:21:04.png",
                  "2016-04-12_18:56:04.png" ]
     A_imgs = read_imgs(base_dir, A)
+
+    B_imgs = [cv2.imread(path) for path in glob("images/red_balls/*.png")]
+
+
+
+    metadata = utilities.read_metadata("images/red_balls/")
 
     img = cv2.imread(base_dir+A[0])
 
@@ -466,8 +557,8 @@ if __name__ == '__main__':
             roi[np.where(mask == 0)] = mask_color
         return roi 
 
-    balls = [utilities.extract_circle(img, ball_circle, 30) for ball_circle in metadata["ball_circles"]]
-    balls = list(map(to_gray, balls))
+    # balls = [utilities.extract_circle(img, ball_circle, 30) for ball_circle in metadata["ball_circles"]]
+    # balls = list(map(to_gray, balls))
 
     # TODO: Operation representation isn't ideal. See ideas, but it's probably
     #       a bit to gather just by polishing current approach too
@@ -481,19 +572,20 @@ if __name__ == '__main__':
     # IDEA: extract default parameter values using fun.__defaults__
     # IDEA: click to only show image under mouse (enlarged)
     # hue_images = [pick_channel(to_hsv(img), 0) for img in images]
-    gray_images = [to_gray(img) for img in A_imgs]
-    gray_pg_images = [extract_roi(img, metadata["playground_poly"], (0)) for img in gray_images]
+    # gray_images = [to_gray(img) for img in A_imgs]
+    pg_images = [extract_roi(img, metadata["playground_poly"], (0)) for img in B_imgs]
+
+    pg_images = list(map(to_ycrcb, pg_images))
+                                
     # to_gray(cv2.imread("twisted_checkerboard.png"))
-    visualize_pipeline(gray_pg_images,
+    visualize_pipeline(pg_images,
                        # warp_pipeline,
                        # flood_fill_pipeline,
                        # iterative_blur_pipeline,
                        # gradient_pipeline,
                        # phase_pipeline,
                        # scale_denom=0.25, row_count=2
-                       [
-                           blur_op(),
-                           hough_op()
-                       ],
+                       # marker_balls_pipeline1,
+                       marker_balls_pipeline2,
                        scale_denom=3, row_count=2
     )
