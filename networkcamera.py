@@ -11,7 +11,6 @@ if sys.version_info.major == 3:
     import urllib.request as urllib
 else:
     import urllib
-import image
 
 
 class NetworkCamera(camera.Camera):
@@ -39,7 +38,7 @@ class NetworkCamera(camera.Camera):
         pic_data = request.read()
         pic_file = tempfile.NamedTemporaryFile(suffix="png")
         pic_file.write(pic_data)
-        return image.Image(image_data=cv2.imread(pic_file.name))
+        return cv2.imread(pic_file.name)
 
     def set(self, property, value):
         property_string = property

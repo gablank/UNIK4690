@@ -29,10 +29,10 @@ class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 if frame_width is not None and frame_height is not None:
                     cam.set_resolution(frame_width, frame_height)
 
-                image = cam.capture()
+                bgr = cam.capture()
                 print(cam)
 
-            cv2.imwrite("image.png", image.get_bgr())
+            cv2.imwrite("image.png", bgr)
             self.path = "image.png"
 
             return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
