@@ -23,48 +23,13 @@ def test_circle_drawing():
     cv2.waitKey()
     cv2.destroyAllWindows()
 
-def circle_bb(circle):
-    (cx,cy), r = circle
-    x, y = cx-r, cy-r
 
-    # How to interpret radius and center in a pixel world?
-    # Kinda makes sense to to force odd diameter, but seems like opencv don't do that.
-    # https://github.com/Itseez/opencv/blob/2f4e38c8313ff313de7c41141d56d945d91f47cf/modules/imgproc/src/drawing.cpp#L1411
-    # See test_circle_drawing
-    # (---+---) or (---+--)
-    w = r*2
-    h = w
-    return (x,y,w,h)
-
-def extract_circle(img, circle, margin=0, mask_color=None):
-    (cx, cy), r = circle
-    x, y, h, w = circle_bb(((cx, cy), r+margin))
-    roi = img[y:y+h, x:x+w]
-    if mask_color:
-        mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.circle(mask, (cx-x, cy-y), r, 255, -1)
-        roi[np.where(mask == 0)] = mask_color
-    return roi
-    
-
-if __name__ == '__main__':
-    path = "images/microsoft_cam/24h/south/2016-04-12_16:19:04.png"
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-
-    metadata = read_metadata(path)
-    if "ball_bbs" not in metadata:
-        img = cv2.imread(path)
-        ball_bbs = utilities.select_rects(img)
-        metadata = update_metadata(os.path.dirname(path), {"ball_bbs": ball_bbs})
-
-    if "ball_circles" not in metadata: 
-        img = cv2.imread(path)
-        circles_bbs = utilities.select_circles(img)
-        metadata = update_metadata(os.path.dirname(path), {"ball_circles": circles_bbs})
-
+def ball_histogram_fun():
     filenames = glob(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/*.png"))
     filenames.sort()
+    metadata = read_metadata(os.path.dirname(filenames[0]))
+    if "ball_circles" not in metadata:
+        interactive_set_metadata(os.path.dirname(filenames[0]), "ball_circles")
 
     # ball_bbs = ([two_point_rect_to_bb(*bb) for bb in metadata["ball_bbs"]])
     # ball_bbs = sorted(ball_bbs, key=lambda bb: bb[2:])
@@ -147,3 +112,31 @@ if __name__ == '__main__':
         utilities.show(frame)
 
 
+def interactive_set_metadata(img_path, key, use_dir_metadata=True):
+    select_fns = { "playground_poly"  : utilities.select_polygon,
+                   "ball_circles"     : utilities.select_circles,
+                   "red_ball_circles" : utilities.select_circles}
+
+    select_fn = select_fns[key]
+
+    img = cv2.imread(path)
+
+    if use_dir_metadata:
+        metadata_path = os.path.dirname(img_path)
+    else:
+        metadata_path = img_path
+
+    result = select_fn(img)
+    changes = {}
+    changes[key] = result
+    update_metadata(metadata_path, changes)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+        what = sys.argv[2] # key in metadata
+
+
+
+    interactive_set_metadata(path, what)
