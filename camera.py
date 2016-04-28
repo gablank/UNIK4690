@@ -19,7 +19,7 @@ ZOOM \
     = range(12)
 
 
-class Camera:
+class Camera(object):
     def __init__(self):
         self._frame_width = None
         self._frame_height = None
