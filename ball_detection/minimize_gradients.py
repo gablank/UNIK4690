@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 import cv2
-from test import minimize_sum_of_squared_gradients, sum_of_squared_gradients
+#from test import minimize_sum_of_squared_gradients, sum_of_squared_gradients
 
 
 class MinimizeGradientsBallDetector:

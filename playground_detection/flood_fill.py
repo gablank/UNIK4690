@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import utilities
 import transformer
+from image import Image
 
 
 class FloodFillPlaygroundDetector:
@@ -19,19 +20,23 @@ class FloodFillPlaygroundDetector:
         if np.average(box) > np.average(best_transformation):
             print("Inverting image")
             best_transformation = 255 - best_transformation
+            box = utilities.get_box(best_transformation, middle, 100)
 
         blur_size = 5
         best_transformation = cv2.blur(best_transformation, (blur_size, blur_size))
 
-        hist = cv2.calcHist([best_transformation], [0], None, [256], [0, 256])
-        hist /= sum(hist)
+        # hist = cv2.calcHist([best_transformation], [0], None, [256], [0, 256])
+        # hist /= sum(hist)
 
-        tot = 0.0
-        idx = 0
+        # tot = 0.0
+        # idx = 0
+        #
+        # while tot < 0.3:
+        #     tot += hist[idx]
+        #     idx += 1
 
-        while tot < 0.3:
-            tot += hist[idx]
-            idx += 1
+
+        # utilities.show(utilities.draw_histogram(box))
 
         box_hist = utilities.get_histogram(box)
         box_hist /= sum(box_hist)
@@ -43,39 +48,33 @@ class FloodFillPlaygroundDetector:
         while tot_sum < 0.9:
             tot_sum += box_hist[cur]
             if high == 255:
-                cur = low - 1
+                low -= 1
             elif low == 0:
-                cur = high + 1
+                high += 1
             else:
                 if box_hist[high+1] > box_hist[low-1]:
-                    cur = high + 1
+                    high += 1
                 else:
-                    cur = low - 1
-            low = min(cur, low)
-            high = max(cur, high)
+                    low -= 1
 
         def threshold_range(img, lo, hi):
             th_lo = cv2.threshold(img, lo, 255, cv2.THRESH_BINARY)[1]
             th_hi = cv2.threshold(img, hi, 255, cv2.THRESH_BINARY_INV)[1]
             return cv2.bitwise_and(th_lo, th_hi)
         print("Thresholding between {} and {}".format(low, high))
+
         best_transformation = threshold_range(best_transformation, low, high)
+
         # ret, best_transformation = cv2.threshold(best_transformation, idx, 255, cv2.THRESH_TOZERO)
         box = utilities.get_box(best_transformation, middle, 100)
         box[:,:] = 255
-        # utilities.show(best_transformation)
 
         best_transformation[np.where(best_transformation == 255)] = 254
-
-        # utilities.show(best_transformation, "transformed image", fullscreen=True, time_ms=0)
 
         num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
 
         best_transformation[np.where(best_transformation != 255)] = 0
         # utilities.show(best_transformation)
-
-        # utilities.show(best_transformation)
-        # utilities.show(img)
 
         kernel_size = 3
         iterations = 1
@@ -86,9 +85,6 @@ class FloodFillPlaygroundDetector:
         best_transformation[np.where(best_transformation == 255)] = 254
         num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
         best_transformation[np.where(best_transformation != 255)] = 0
-
-        # utilities.show(transformed, time_ms=10)
-        #utilities.show(transformed, "transformed image", fullscreen=True, time_ms=10)
 
         im2, contours, hierarchy = cv2.findContours(best_transformation.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -106,6 +102,7 @@ class FloodFillPlaygroundDetector:
             # utilities.show(temp, "contours")
 
             convex_hull = cv2.approxPolyDP(convex_hull, 5, True)
+            original_convex_hull = convex_hull.copy()
             # temp = utilities.draw_convex_hull(img, convex_hull)
             # utilities.show(temp, "contours")
 
@@ -170,12 +167,141 @@ class FloodFillPlaygroundDetector:
                     convex_hull_as_list.remove(v2)
                     copy[np.where(triangle_mask != 0)] = outside_convex_hull_color
 
-            # for i in range(len(convex_hull)):
-            #     angle = utilities.get_angle(convex_hull[(i-1)%len(convex_hull)][0], convex_hull[i][0], convex_hull[(i+1)%len(convex_hull)][0])
-            #     if 25 < angle < 170:
-            #         new_convex_hull.append(convex_hull[i])
-            # convex_hull = np.array(new_convex_hull)
+            def show_lines(image, pts):
+                to_show = image.get_bgr().copy()
+                for idx, pt1 in enumerate(pts):
+                    if idx % 2 == 0:
+                        color = (0, 0, 1)
+                    else:
+                        color = (1, 0, 0)
+                    pt2 = pts[(idx+1) % len(pts)]
+                    cv2.line(to_show, pt1, pt2, color, 3)
+                utilities.show(to_show, text=image.filename, time_ms=30)
 
-            return new_convex_hull
+            # show_lines(image, new_convex_hull)
+
+            convex_hull = []
+            for idx, pt in enumerate(new_convex_hull):
+                angle = utilities.get_angle(new_convex_hull[(idx-1)%len(new_convex_hull)], pt, new_convex_hull[(idx+1)%len(new_convex_hull)])
+                if 15 < angle < 180-15:
+                    convex_hull.append(pt)
+
+            new_convex_hull = convex_hull
+            # show_lines(image, new_convex_hull)
+
+            angles = []
+            for idx, pt in enumerate(new_convex_hull):
+                angles.append((pt, utilities.get_angle(new_convex_hull[(idx-1)%len(new_convex_hull)], pt, new_convex_hull[(idx+1)%len(new_convex_hull)])))
+
+            angles.sort(key=lambda x: x[1], reverse=True)
+
+            lines = []
+            for idx, pt in enumerate(new_convex_hull):
+                pt2 = new_convex_hull[(idx+1)%len(new_convex_hull)]
+                lines.append((pt, pt2, idx))
+
+            # sort by line length
+            lines.sort(key=lambda x: utilities.distance(x[0], x[1]))
+
+            top_four = list(lines[-4:])
+            top_four.sort(key=lambda x: x[2])
+
+            points = []
+            for idx, line in enumerate(top_four):
+                next = top_four[(idx+1) % len(top_four)]
+                l1_p1, l1_p2, line_idx = line[0], line[1], line[2]
+                l2_p1, l2_p2, next_idx = next[0], next[1], next[2]
+
+                #print("From", l1_p1, "to", l1_p2)
+                #print("From", l2_p1, "to", l2_p2)
+                #print()
+
+                # cv2.circle(img, l1_p1, 9, (0,0,255), 5)
+                # cv2.circle(img, l1_p2, 9, (0,255,0), 5)
+
+                l1_p1x, l1_p2x = l1_p1[0], l1_p2[0]
+                l2_p1x, l2_p2x = l2_p1[0], l2_p2[0]
+
+                l1_p1y, l1_p2y = l1_p1[1], l1_p2[1]
+                l2_p1y, l2_p2y = l2_p1[1], l2_p2[1]
+
+                def intersection(x1, y1, x2, y2, x3, y3, x4, y4):
+                    Px_upper = np.array([x1, y1, x1, 1, x2, y2, x2, 1, x3, y3, x3, 1, x4, y4, x4, 1]).reshape((4,4))
+                    lower = np.array([x1, 1, y1, 1, x2, 1, y2, 1, x3, 1, y3, 1, x4, 1, y4, 1]).reshape((4,4))
+
+                    Py_upper = Px_upper.copy()
+                    Py_upper[:,2] = Py_upper[:,1].copy()
+
+                    _det = np.linalg.det
+                    def det(mat):
+                        return _det(mat[:2, :2]) * _det(mat[2:, 2:]) - _det(mat[2:, :2]) * _det(mat[:2, 2:])
+
+                    return (int(round(det(Px_upper) / det(lower), 0)), int(round(det(Py_upper) / det(lower), 0)))
+
+
+                point = intersection(l1_p1x, l1_p1y, l1_p2x, l1_p2y, l2_p1x, l2_p1y, l2_p2x, l2_p2y)
+                points.append(point)
+
+            print(points)
+
+            lines = []
+            for idx, pt1 in enumerate(points):
+                lines.append((pt1, points[(idx + 1) % len(points)]))
+
+            # sort by line length
+            lines.sort(key=lambda x: (x[0][0]-x[1][0])**2 + (x[0][1]-x[1][1])**2)
+
+            print("Lines:", lines)
+
+            # shortest line is probably one of the short sides
+            short_side = lines[0]
+            # sides_in_order: First one of the short sides, then a long side, then the other short side, then the last long side
+            sides_in_order = [short_side[0], short_side[1]]
+            while len(sides_in_order) < 4:
+                for line in lines:
+                    if len(sides_in_order) >= 4:
+                        break
+                    if sides_in_order[-1] == line[0]:
+                        sides_in_order.append(line[1])
+
+            show_lines(image, sides_in_order)
+            return sides_in_order
 
         return
+
+
+if __name__ == "__main__":
+    flood_fill = FloodFillPlaygroundDetector(None)
+
+    # try:
+    import os
+    filenames = []
+    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+        filenames = cur[2]
+        break
+
+    filenames.sort()
+
+    try:
+        for file in filenames:
+            try:
+                import datetime
+                date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+                # if date < datetime.datetime(2016, 4, 13, 7, 5):
+                # if date < datetime.datetime(2016, 4, 12, 19, 0):
+                #     continue
+                image = Image(file, color_normalization=False)
+            except FileNotFoundError:
+                continue
+            except ValueError:
+                continue
+
+            flood_fill.detect(image)
+
+    except Exception as e:
+        import traceback
+        print(e)
+        traceback.print_tb(e.__traceback__)
+
+    finally:
+        flood_fill.transformer.save(filename="playground_transformer_state.json")

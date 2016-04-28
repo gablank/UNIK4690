@@ -25,14 +25,21 @@ class Image:
             self.bgr = image_data
 
         if color_normalization:
-            # utilities.show(self.bgr)
-            self.bgr = utilities.as_float32(self.bgr)
-            target_averages = [0.636815, 0.543933, 0.469305]
+            # rg chromaticity: normalized rgb
+            bgr = self.get_bgr()
+            S = bgr[:,:,0] + bgr[:,:,1] + bgr[:,:,2]
             for i in range(3):
-                self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
-            self.bgr[np.where(self.bgr > 1.0)] = 1.0
-            self.bgr[np.where(self.bgr < 0.0)] = 0.0
-            self.bgr = utilities.as_uint8(self.bgr)
+                bgr[:,:,i] *= 255/S
+                self.bgr[:,:,i] = bgr[:,:,i].astype(np.uint8)
+
+            # utilities.show(self.bgr)
+            # self.bgr = utilities.as_float32(self.bgr)
+            # target_averages = [0.636815, 0.543933, 0.469305]
+            # for i in range(3):
+            #     self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
+            # self.bgr[np.where(self.bgr > 1.0)] = 1.0
+            # self.bgr[np.where(self.bgr < 0.0)] = 0.0
+            # self.bgr = utilities.as_uint8(self.bgr)
             # utilities.show(self.bgr)
 
         self.hsv = None
@@ -114,4 +121,4 @@ if __name__ == "__main__":
         except FileNotFoundError:
             continue
 
-        img.get_light_mask()
+        utilities.show_all(img)
