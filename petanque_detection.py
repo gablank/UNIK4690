@@ -454,10 +454,18 @@ class PetanqueDetection:
 
 
 if __name__ == "__main__":
-    # petanque_detection = PetanqueDetection()
-    petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
-                                           BallDetector=HoughBallDetector
-    )
+    petanque_detection = PetanqueDetection()
+    # petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
+    #                                        BallDetector=HoughBallDetector
+    # )
+    import networkcamera
+
+    with networkcamera.NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+        while True:
+            frame = cam.capture()
+            image = Image(image_data=frame)
+
+            petanque_detection.detect(image)
 
     # try:
     import os
