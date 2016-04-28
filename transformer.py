@@ -4,6 +4,7 @@ import utilities
 import cv2
 from image import Image
 import json
+import copy
 
 
 def discriminatory_power(grayscale):
@@ -15,7 +16,7 @@ def discriminatory_power(grayscale):
     all_var = all_std_dev[0][0]**2
     box_mean = box_mean[0][0]
     all_mean = all_mean[0][0]
-    return (box_mean - all_mean)**2 / box_var
+    return (box_mean - all_mean)**2 / (box_var + all_var)
 
 
 def mean_diff(grayscale, box=None):
@@ -24,7 +25,10 @@ def mean_diff(grayscale, box=None):
     box_mean, box_std_dev = cv2.meanStdDev(box)
     all_mean, all_std_dev = cv2.meanStdDev(grayscale)
     # print(abs(box_mean - all_mean), 70*box_std_dev**2)
-    return abs(box_mean - all_mean) - 70*box_std_dev**2
+    import math
+    print(abs(box_mean - all_mean)[0][0], 70*box_std_dev[0][0]**2, 0*all_std_dev[0][0]**2)
+    # return abs(box_mean - all_mean) - 70*box_std_dev**2# - 30*all_std_dev**2
+    return abs(box_mean - all_mean)[0][0] - 70*box_std_dev[0][0]**2 - 0*all_std_dev[0][0]**2
 
 
 def ball_fitness_func(grayscale):
@@ -63,7 +67,7 @@ class Transformer:
         cur_best_fitness = self.playground_fitness_func(utilities.transform_image(image, cur_best_transform))
 
         # Perform a quick hill climber before returning
-        step_size = 0.1
+        step_size = 0.3
         max_iters = 1
         for idx in range(max_iters):
             # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
@@ -95,6 +99,37 @@ class Transformer:
 
             if not new_best:
                 break
+        # step_size = 0.1
+        # max_iters = 1
+        # h = 0.01
+        # for idx in range(max_iters):
+        #
+        #     highest = 0
+        #     for key, coefficient in cur_best_transform.items():
+        #         highest = max(highest, abs(coefficient))
+        #
+        #     for key in cur_best_transform:
+        #         cur_best_transform[key] /= highest
+        #
+        #     gradient = {}
+        #     # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
+        #     new_best = False
+        #     for color_space, coefficient in cur_best_transform.items():
+        #         c1 = copy.deepcopy(cur_best_transform)
+        #         c2 = copy.deepcopy(cur_best_transform)
+        #
+        #         # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
+        #         c1[color_space] += h/2
+        #         c2[color_space] -= h/2
+        #
+        #         c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
+        #         c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
+        #
+        #         gradient[color_space] = (c1_fitness - c2_fitness) / h
+        #
+        #     print(gradient)
+        #     for color_space, coefficient in cur_best_transform.items():
+        #         cur_best_transform[color_space] = coefficient + gradient[color_space] * step_size
 
         # Update the previous best
         if self.playground_transformations[-1] != cur_best_transform:
@@ -130,8 +165,31 @@ if __name__ == "__main__":
     # utilities.show(transform)
     # exit(0)
 
-
     transformer = Transformer(filename="playground_transformer_state.json")
+
+#{"ball_transformations": null, "playground_transformations": [{"lab_a": -0.3835904764611054, "ycrcb_y": 0.18121514971491337, "ycrcb_cn": -0.010627159328814776, "bgr_r": -0.7900661518043041, "bgr_b": 0.11399199903420945, "ycrcb_cr": -0.6889582901043134, "hsv_h": 0.9119966281808028, "hsv_v": -1.0, "bgr_g": 0.6797306701997627, "hsv_s": -0.24043657910513946, "lab_b": -0.28036275430352386, "lab_l": -0.16593829211255623}]}
+    image = Image("images/test.png")
+    try:
+        while True:
+            best_transform = transformer.get_playground_transformation(image)
+            utilities.show(best_transform, time_ms=30)
+    except Exception as e:
+        import traceback
+        print(e)
+        traceback.print_tb(e.__traceback__)
+        transformer.save(filename="playground_transformer_state.json")
+    exit(0)
+    #
+    # import networkcamera, camera
+    #
+    # with networkcamera.NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+    #     cam.set(camera.EXPOSURE, 10)
+    #     while True:
+    #         frame = cam.capture()
+    #         image = Image(image_data=frame, color_normalization=True)
+    #
+    #         best_transform = transformer.get_playground_transformation(image)
+    #         utilities.show(best_transform, time_ms=30)
 
     try:
         import os
@@ -147,9 +205,9 @@ if __name__ == "__main__":
                 import datetime
                 date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
-                # if date < datetime.datetime(2016, 4, 12, 19, 0):
-                #     continue
-                image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
+                if date < datetime.datetime(2016, 4, 12, 19, 0):
+                    continue
+                image = Image(os.path.join("images/microsoft_cam/24h/south/", file))
                 # color_spaces = image.get_color_space_dict()
                 #
                 # def my_fitness(transform, box=None):
@@ -173,10 +231,8 @@ if __name__ == "__main__":
             except FileNotFoundError:
                 continue
             best_transform = transformer.get_playground_transformation(image)
-            import playground_detection
-            playing_field = playground_detection.detect(image, best_transform, "flood_fill", draw_field=True)
 
-            # utilities.show(best_transform, time_ms=10, text=img.filename)
+            utilities.show(best_transform, time_ms=30, text=image.filename)
     except Exception as e:
         import traceback
         print(e)
