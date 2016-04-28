@@ -65,27 +65,36 @@ class Transformer:
         # Perform a quick hill climber before returning
         step_size = 0.1
         max_iters = 1
-        for _ in range(max_iters):
-                for color_space, coefficient in cur_best_transform.items():
-                    c1 = cur_best_transform.copy()
-                    c2 = cur_best_transform.copy()
+        for idx in range(max_iters):
+            # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
+            new_best = False
+            for color_space, coefficient in cur_best_transform.items():
+                c1 = cur_best_transform.copy()
+                c2 = cur_best_transform.copy()
 
-                    # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
-                    c1[color_space] += max(0.05, step_size * c1[color_space])
-                    c2[color_space] -= max(0.05, step_size * c2[color_space])
+                # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
+                c1[color_space] += max(0.05, step_size * c1[color_space])
+                c2[color_space] -= max(0.05, step_size * c2[color_space])
 
-                    c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
-                    c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
+                c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
+                c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
 
-                    if c1_fitness > cur_best_fitness:
-                        cur_best_transform = c1
-                        cur_best_fitness = c1_fitness
-                        # break
+                if c1_fitness > cur_best_fitness:
+                    cur_best_transform = c1
+                    cur_best_fitness = c1_fitness
+                    new_best = True
+                    # break
 
-                    if c2_fitness > cur_best_fitness:
-                        cur_best_transform = c2
-                        cur_best_fitness = c2_fitness
-                        # break
+                if c2_fitness > cur_best_fitness:
+                    cur_best_transform = c2
+                    cur_best_fitness = c2_fitness
+                    new_best = True
+                    # break
+
+            print(cur_best_transform)
+
+            if not new_best:
+                break
 
         # Update the previous best
         if self.playground_transformations[-1] != cur_best_transform:
