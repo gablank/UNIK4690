@@ -1,5 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""
+This file must be compatible with Python 2 and 3!
+"""
+import camera
 import cv2
 import subprocess
 
@@ -12,22 +16,8 @@ _list_devices_cmd = "--list-devices"
 _set_frame_size_cmd = "--set-fmt-video=width={},height={}"
 _get_frame_size_cmd = "--get-fmt-video"
 
-BRIGHTNESS, \
-CONTRAST, \
-SATURATION, \
-WHITE_BALANCE_TEMPERATURE_AUTO, \
-WHITE_BALANCE_TEMPERATURE, \
-SHARPNESS, \
-BACKLIGHT_COMPENSATION, \
-EXPOSURE_AUTO, \
-EXPOSURE, \
-FOCUS_AUTO, \
-FOCUS, \
-ZOOM \
-    = range(12)
 
-
-class Camera:
+class LocalCamera(camera.Camera):
     def __init__(self, camera_idx=None):
         if camera_idx is None:
             camera_idx = self._detect_microsoft_lifecam()
@@ -42,10 +32,9 @@ class Camera:
             raise RuntimeError("Unable to open camera!")
 
         self.camera_idx = camera_idx
+        self._camera_device = _camera_device.format(self.camera_idx)
 
-        self._frame_width = None
-        self._frame_height = None
-        self.set_defaults()
+        super(LocalCamera, self).__init__()
 
     def capture(self):
         # Make sure any new settings have been applied
@@ -55,23 +44,27 @@ class Camera:
 
     def set_defaults(self):
         self.set_resolution(1920, 1080)
-        self.set(BRIGHTNESS, 110)
-        self.set(CONTRAST, 5)
-        self.set(SATURATION, 100)
-        self.set(WHITE_BALANCE_TEMPERATURE_AUTO, 0)
-        self.set(WHITE_BALANCE_TEMPERATURE, 5000)
-        self.set(SHARPNESS, 50)
-        self.set(BACKLIGHT_COMPENSATION, 0)
-        self.set(EXPOSURE_AUTO, 1)  # Not a bool, but mapping. 1 means manual, 3 is auto
-        self.set(EXPOSURE, 1)
-        self.set(FOCUS_AUTO, 0)
-        self.set(FOCUS, 0)
-        self.set(ZOOM, 0)
+        self.set(camera.BRIGHTNESS, 110)
+        self.set(camera.CONTRAST, 5)
+        self.set(camera.SATURATION, 100)
+        self.set(camera.WHITE_BALANCE_TEMPERATURE_AUTO, 0)
+        self.set(camera.WHITE_BALANCE_TEMPERATURE, 5000)
+        self.set(camera.SHARPNESS, 50)
+        self.set(camera.BACKLIGHT_COMPENSATION, 0)
+        self.set(camera.EXPOSURE_AUTO, 1)  # Not a bool, but mapping. 1 means manual, 3 is auto
+        self.set(camera.EXPOSURE, 1)
+        self.set(camera.FOCUS_AUTO, 0)
+        self.set(camera.FOCUS, 0)
+        self.set(camera.ZOOM, 0)
 
     def set(self, property, value):
-        property_string, low, high = self._property_to_string(property)
-        if low > value or high < value:
-            raise ValueError("Value is outside of property range: {} <= {} <= {}".format(low, property_string, high))
+        property_string = property
+
+        if isinstance(property, int):
+            property_string, low, high = self._property_to_string(property)
+
+            if low > value or high < value:
+                raise ValueError("Value is outside of property range: {} <= {} <= {}".format(low, property_string, high))
 
         self._call(_v4l2_cmd,
                    _v4l2_select_device,
@@ -90,22 +83,6 @@ class Camera:
         colon_position = output.find(":")
         value = output[colon_position+1:]
         return int(value)
-
-    def _property_to_string(self, cv2_property):
-        return {
-            BRIGHTNESS: ("brightness", 30, 255),
-            CONTRAST: ("contrast", 0, 10),
-            SATURATION: ("saturation", 0, 200),
-            WHITE_BALANCE_TEMPERATURE_AUTO: ("white_balance_temperature_auto", 0, 1),
-            WHITE_BALANCE_TEMPERATURE: ("white_balance_temperature", 2500, 10000),
-            SHARPNESS: ("sharpness", 0, 50),
-            BACKLIGHT_COMPENSATION: ("backlight_compensation", 0, 10),
-            EXPOSURE_AUTO: ("exposure_auto", 1, 3),
-            EXPOSURE: ("exposure_absolute", 1, 10000),
-            FOCUS_AUTO: ("focus_auto", 0, 1),
-            FOCUS: ("focus_absolute", 0, 40),
-            ZOOM: ("zoom_absolute", 0, 317),
-        }[cv2_property]
 
     def set_resolution(self, width, height):
         self.cap.set(3, width)
@@ -165,32 +142,12 @@ class Camera:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cap.release()
 
-    def __str__(self):
-        camera_device = _camera_device.format(self.camera_idx)
-        self.get_resolution()
-        as_str = "Camera read from: {}\n".format(camera_device)
-        as_str += "Camera settings:\n"
-        as_str += "Resolution: {}x{}\n".format(self._frame_width, self._frame_height)
-        as_str += "Saturation: {}\n".format(self.get(SATURATION))
-        as_str += "Auto exposure: {}\n".format(self.get(EXPOSURE_AUTO))
-        as_str += "Exposure: {}\n".format(self.get(EXPOSURE))
-        as_str += "Auto focus: {}\n".format(self.get(FOCUS_AUTO))
-        as_str += "Focus: {}\n".format(self.get(FOCUS))
-        as_str += "Brightness: {}\n".format(self.get(BRIGHTNESS))
-        as_str += "Sharpness: {}\n".format(self.get(SHARPNESS))
-        as_str += "Auto white balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
-        as_str += "White balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE))
-
-        return as_str
-
 
 if __name__ == "__main__":
-    with Camera() as camera:
+    with LocalCamera() as camera:
 
         while True:
             import utilities
             frame = camera.capture()
-            frame = utilities.as_float32(frame)
-            frame = utilities.as_uint8(frame)
 
             utilities.show(frame, time_ms=30, draw_histograms=True)

@@ -1,27 +1,39 @@
 #!/usr/bin/python2
-import camera
 import SimpleHTTPServer
 import SocketServer
 import cv2
+from urlparse import urlparse, parse_qs
+import localcamera
 
 
 class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path.find("/new_image.png") >= 0:
-            exposure_pos = self.path.find("&exposure=")
-            exposure = None
-            if exposure_pos >= 0:
-                exposure = int(self.path[exposure_pos+len("&exposure="):])
-                print("Setting exposure to {}".format(exposure))
+        parsed = urlparse(self.path)
+        if parsed.path == "/new_image.png":
+            with localcamera.Camera() as cam:
+                frame_width = None
+                frame_height = None
+                parsed_query = parse_qs(parsed.query)
+                for property, value_list in parsed_query.items():
+                    if len(value_list) != 1:
+                        continue
 
-            with camera.Camera() as cam:
-                if exposure is not None:
-                    cam.set(camera.EXPOSURE, exposure)
+                    value = int(value_list[0])
+                    if property == "width":
+                        frame_width = value
+                    if property == "height":
+                        frame_height = value
+                    cam.set(property, value)
+
+                if frame_width is not None and frame_height is not None:
+                    cam.set_resolution(frame_width, frame_height)
+
                 bgr = cam.capture()
                 print(cam)
 
             cv2.imwrite("image.png", bgr)
             self.path = "image.png"
+
             return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
         self.send_error(402)
