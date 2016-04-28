@@ -12,14 +12,14 @@ class Image:
 
         self.filename = None
         if path is not None:
-            self.path = utilities.locate_file(path)
+            path = utilities.locate_file(path)
 
             self.bgr = cv2.imread(path)
             self.filename = os.path.basename(path)
             if self.bgr is None:
                 raise FileNotFoundError("Unable to load image from {}".format(path))
-        else:
-            self.path = None
+
+        self.path = path
 
         if image_data is not None:
             self.bgr = image_data
