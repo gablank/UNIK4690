@@ -10,7 +10,7 @@ class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/new_image.png":
-            with localcamera.Camera() as cam:
+            with localcamera.LocalCamera() as cam:
                 frame_width = None
                 frame_height = None
                 parsed_query = parse_qs(parsed.query)
