@@ -356,6 +356,60 @@ def draw_histogram(single_channel_img, max_height=256, padding=2,
     return hist_img
 
 
+def distance_point_to_line(line_pt1, line_pt2, pt):
+    """
+    Get the distance from pt to the line passing through line_pt1 and line_pt2
+    """
+    line_length = distance(line_pt1, line_pt2)
+    if line_length == 0:
+        return distance(line_pt1, pt)
+
+    return abs((line_pt2[1]-line_pt1[1])*pt[0] - (line_pt2[0] - line_pt1[0])*pt[1] + line_pt2[0]*line_pt1[1] - line_pt2[1]*line_pt1[0])\
+           / line_length
+
+
+def distance_point_to_bounded_line(line_pt1, line_pt2, pt):
+    """
+    Get the distance from pt to the line passing through line_pt1 and line_pt2.
+    The line is bounded at line_pt1 and line_pt2, so if the closest point is "outside" the line, the distance to the
+    nearest point is returned.
+    Example:
+             line_pt2
+                 o
+                /
+               /        pt
+              /        o
+             /
+            /
+           o
+        line_pt1
+    In this case the same number as returned from distance_point_to_line is returned
+
+                          pt
+                          o
+             line_pt2
+                 o
+                /
+               /
+              /
+             /
+            /
+           o
+        line_pt1
+    In this case the euclidean distance from pt to line_pt2 is returned
+    """
+    dist_infinite_line = distance_point_to_line(line_pt1, line_pt2, pt)
+    euclidean_dist_to_line_pt1 = distance(line_pt1, pt)
+    euclidean_dist_to_line_pt2 = distance(line_pt2, pt)
+    distance_along_line_to_line_pt1 = math.sqrt(euclidean_dist_to_line_pt1**2 - dist_infinite_line**2)
+    distance_along_line_to_line_pt2 = math.sqrt(euclidean_dist_to_line_pt2**2 - dist_infinite_line**2)
+    line_length = distance(line_pt1, line_pt2)
+
+    if distance_along_line_to_line_pt1 > line_length or distance_along_line_to_line_pt2 > line_length:
+        return min(distance_along_line_to_line_pt1, distance_along_line_to_line_pt2)
+    return dist_infinite_line
+
+
 def get_metadata_path(img_path):
     img_name = os.path.basename(img_path)
     img_dir = img_path
