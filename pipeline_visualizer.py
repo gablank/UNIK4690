@@ -28,12 +28,11 @@ class Operation:
     def has_params(self):
         return self.params is not None
 
-
 def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
     cv2.namedWindow("pipeline-viz")
 
     def report_timing(*args):
-        if True:
+        if False:
             print(*args)
 
     resolution = 100
@@ -53,6 +52,13 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
     h, w = inputs[0].shape[:2]
     canvas_shape = (ceil(row_count * h/scale_denom), ceil((w//scale_denom) * ceil(len(inputs)/row_count)), 3)
     canvas = np.zeros(canvas_shape, dtype=np.uint8)
+
+    def mouseCallback(ev, x, y, flags, param):
+        # Draw a marker in each image corresponding to the mouse pointer
+        # Figure out which image the mouse is in
+        # Calculate the relative coordinates
+        
+        pass
 
     def trackbarCallback(op, param_name):
         range = op.param_ranges[param_name]
@@ -77,15 +83,17 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
         timer = Timer()
         row = 0
         full_height, full_width = inputs[0].shape[:2]
-        target_size = (full_width//scale_denom, full_height//scale_denom)
+        target_size = (int(full_width//scale_denom), int(full_height//scale_denom))
         w, h = target_size
         x,y = (0,0)
         row_size = ceil(len(inputs)/row_count)
+        canvas = np.zeros(canvas_shape, dtype=np.uint8)
+
         for i, img in enumerate(inputs):
             if i > 0 and (i % row_size) == 0:
                 x = 0
                 y += h
-            img = cv2.resize(img, target_size)
+            img = cv2.resize(img, target_size, interpolation=cv2.INTER_NEAREST)
             if len(img.shape) == 2 or img.shape[2] == 1:
                 img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
             canvas[y:y+h, x:x+w] = img[:,:]
@@ -110,14 +118,16 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
 
     for i, op in enumerate(operations):
         if op.has_params():
-            for name, range in op.param_ranges.items():
+            names_sorted = sorted(op.param_ranges.keys())
+            for name in names_sorted:
+                parm_range = op.param_ranges[name]
                 count = None
                 init_value = None
-                if type(range) == list:
-                    count = len(range)-1
-                    init_value = range.index(op.params[name])
-                elif type(range) == tuple:
-                    lo, hi = range
+                if type(parm_range) == list:
+                    count = len(parm_range)-1
+                    init_value = parm_range.index(op.params[name])
+                elif type(parm_range) == tuple:
+                    lo, hi = parm_range
                     if type(lo) == int:
                         count = hi-lo
                         init_value = op.params[name] - lo
@@ -185,11 +195,17 @@ def threshold_range(img, lo, hi):
 threshold_range_op = lambda: Operation("threshold_range", threshold_range,
                                        {"lo": (0, (0, 256)),
                                         "hi": (100, (0, 256))})
+def threshold_window(img, t, width):
+    return threshold_range(img, t, t+width)
+
+threshold_window_op = lambda: Operation("threshold_window", threshold_window,
+                                        {"t": (100, (0,256)),
+                                         "width": (10, (1, 256))})
 
 def threshold(img, t, threshold_type=cv2.THRESH_BINARY):
     return cv2.threshold(img, t, 255, threshold_type)[1]
 
-threshold_op = lambda threshold_type: Operation("threshold",
+threshold_op = lambda threshold_type=cv2.THRESH_BINARY: Operation("threshold",
                                                 partial(threshold, threshold_type=threshold_type),
                                                 {"t": (100, (0, 256))})
 
@@ -216,7 +232,15 @@ def make_repeated_op(op, n):
     return Operation(op.name, repeat, params=op.param_specs)
 
 def iterative_blur_threshold(img, iterations, t):
+    kernel = np.array([[2, 2, 2, 2, 2],
+                       [2, 1, 1, 1, 2],
+                       [2, 1, 1, 1, 2],
+                       [2, 1, 1, 1, 2],
+                       [2, 2, 2, 2, 2]])
+    kernel = kernel/np.sum(kernel)
     def step(img):
+        # img = cv2.medianBlur(img, 7)
+        # img = cv2.filter2D(img, -1, kernel)
         img = blur(blur(img, 11), 7)
         img = threshold(img, t, cv2.THRESH_TOZERO)
         return img
@@ -246,6 +270,7 @@ def flood_fill_until(img, box_size, min_ratio):
     return img
 
 flood_fill_until_op = lambda: Operation("flood fill until", flood_fill_until,
+
                                         {"box_size": (30, (0,100)),
                                          "min_ratio": (0.2, (0.0, 1.0))})
 
@@ -255,41 +280,194 @@ def set_params(pipeline, op_param_map):
     """
     for op in pipeline:
         op.params = op_param_map[op.name]
-    return pipeline
+        return pipeline
 
+
+
+iterative_blur_pipeline = [
+    threshold_op(cv2.THRESH_TOZERO_INV),
+    iterative_blur_threshold_op(),
+]
+
+ranged_threshold_pipeline = [
+    power_op(),
+    threshold_range_op(),
+    close_op(),
+    Operation("open", open, {"kernel_size": (3, [3,5,7,9],),
+                                "iterations" : (3, (1, 40))})
+]
+
+ranged_threshold_pipeline = set_params(ranged_threshold_pipeline,
+                                        {
+                                            "power": {'n': 0},
+                                            "threshold_range": {'hi': 146, 'lo': 98},
+                                            "close": {'iterations': 5},
+                                            "open": {'kernel_size': 5, 'iterations': 21},
+                                        })
+
+flood_fill_pipeline = [
+    power_op(),
+    dilate_op(),
+    flood_fill_until_op(),
+]
+
+
+def gradient_length(img, size, order):
+    img = img.astype(np.float32)
+    kx1, kx2 = cv2.getDerivKernels(1, 0, size)
+    ky1, ky2 = cv2.getDerivKernels(0, 1, size)
+    Ix = cv2.sepFilter2D(img, -1, kx1, kx2)
+    Iy = cv2.sepFilter2D(img, -1, ky1, ky2)
+
+    return utilities.as_uint8(np.sqrt(Ix**2+Iy**2)) # or just abs(Ix+Iy)?
+
+def gradient(img, size, order, which):
+    dx = [order, 0, order]
+    dy = [0, order, order]
+    kx, ky = cv2.getDerivKernels(dx[which], dy[which], size)
+    # img = img.astype(np.float32)
+    img = cv2.sepFilter2D(img, cv2.CV_32F, kx, ky)
+    return utilities.as_uint8(np.abs(img))
+    return img
+
+def distance(img, distance_type):
+    return cv2.distanceTransform(img, distance_type, cv2.DIST_MASK_PRECISE)
+
+def phase(img, size, order, norm_t):
+    img = img.astype(np.float32)
+    kx1, kx2 = cv2.getDerivKernels(1, 0, size)
+    ky1, ky2 = cv2.getDerivKernels(0, 1, size)
+    Ix = cv2.sepFilter2D(img, -1, kx1, kx2)
+    Iy = cv2.sepFilter2D(img, -1, ky1, ky2)
+
+    phase = cv2.phase(Ix, Iy)+1
+    norm = np.sqrt(Ix**2+Iy**2)
+    norm = norm / np.max(norm)
+
+    hsv = np.ones((img.shape[0], img.shape[1], 3), dtype=np.float32)
+
+    phase -= np.min(phase)
+
+    hsv[:,:,0] = phase/np.max(phase)
+    hsv[:,:,1] = 0.5
+    hsv[:,:,2] = norm
+
+    hsv *= 255
+    hsv = np.round(hsv).astype(np.uint8)
+
+    print(np.min(phase), np.max(phase))
+    norm_max = np.max(norm)
+    print(norm_max)
+    # phase[np.where(norm < norm_t*norm_max)] = 0
+
+    res = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+    return utilities.as_uint8(res) # or just abs(Ix+Iy)?
+
+kernel_parm = (3, list(range(3, 50, 2)))
+
+def cross_response(img, size, width):
+    kernel = np.ones((size, size))
+    m = size // 2
+    w = round((m-1)*width)
+    print(w, m, size, width)
+    kernel[0:size, m-w:m+w+1] = -1
+    kernel[m-w:m+w+1, 0:size] = -1
+    kernel = kernel / np.sum(kernel[np.where(kernel > 0)])
+    img = cv2.filter2D(img, -1, kernel)
+    return img
+
+cross_response_op = lambda: Operation("cross response", cross_response, {"size": kernel_parm, "width": (0.3, (0.0, 1.0))})
+
+phase_pipeline = [
+    blur_op(),
+    Operation("phase", phase, {"size": (3, [3, 5, 7, 9, 11, 13, 15, 17, 31]),
+                                "order": (1, [1,2,3,4]),
+                                "norm_t": (0, (0.0, 1.0)),}),
+    threshold_window_op(),
+    # Operation("hist", utilities.draw_histogram),
+    # threshold_op(cv2.THRESH_BINARY_INV),
+]
+
+gradient_pipeline = [
+    blur_op(),
+    Operation("grad", gradient, {"size": (3, [1, 3, 5, 7]), "order": (1, [1,2,3,4]), "which": (0, [0, 1, 2])}),
+    # threshold_op(cv2.THRESH_BINARY_INV),
+    cross_response_op(),
+    # Operation("distance", distance, {"distance_type": (cv2.DIST_L1, [cv2.DIST_L1, cv2.DIST_L2, cv2.DIST_L12, cv2.DIST_C])}),
+    # threshold_op(),
+
+    # Operation("gradient-length", gradient_length, {"size": (3, [3, 5, 7, 9, 11]), "order": (1, [1,2,3,4])}),
+]
+
+
+def perspective_warp(img, x1, x2, x3, x4, x5, x6, x7, x8, x9):
+    M = np.array([x1, x2, x3, x4, x5, x6, x7, x8, x9]).reshape(3,3)
+
+    return cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))
+
+warp_parms = { "x"+str(i): (0, (-30.0, 30.0)) for i in range(1,10) }
+
+
+warp_pipeline = [
+    Operation("warp", perspective_warp, warp_parms) 
+]
+
+
+def hough(img, min_radius, max_radius, p1, p2):
+    circles = cv2.HoughCircles(img, cv2.HOUGH_GRADIENT, 1, 20, param1=p1, param2=p2, minRadius=min_radius, maxRadius=max_radius)
+
+    grayscale = img.copy()
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for i in circles[0,:]:
+            # draw the outer circle
+            cv2.circle(grayscale,(i[0],i[1]),i[2],(0,255,0),2)
+            # draw the center of the circle
+            cv2.circle(grayscale,(i[0],i[1]),2,(0,0,255),3)
+
+    return grayscale
+
+hough_op = lambda: Operation("hough", hough, {"min_radius": (5, (1, 50)), "max_radius": (22, (1, 50)),
+                                              "p1": (10, (1, 500)), "p2": (10, (1, 500))})
 
 if __name__ == '__main__':
 
-    img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png"]
+    img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png",
+                 "24h/south/2016-04-12_18:56:04.png", 
+    ]
+
+    def read_imgs(base_dir, paths):
+        return list(map(cv2.imread, [base_dir+img_path for img_path in paths]))
+
     images = list(map(cv2.imread, ["images/microsoft_cam/"+img_path for img_path in img_paths]))
     images = [i for i in images if i is not None]
 
-    iterative_blur_pipeline = [
-        threshold_op(cv2.THRESH_TOZERO_INV),
-        iterative_blur_threshold_op(),
-    ]
+    base_dir = "images/microsoft_cam/24h/south/"
+    metadata = utilities.read_metadata(base_dir)
 
-    ranged_threshold_pipeline = [
-        power_op(),
-        threshold_range_op(),
-        close_op(),
-        Operation("open", open, {"kernel_size": (3, [3,5,7,9],),
-                                 "iterations" : (3, (1, 40))})
-    ]
+    A = [ "2016-04-12_18:59:03.png", "2016-04-12_19:21:04.png",
+                 "2016-04-12_18:56:04.png" ]
+    A_imgs = read_imgs(base_dir, A)
 
-    ranged_threshold_pipeline = set_params(ranged_threshold_pipeline,
-                                           {
-                                               "power": {'n': 0},
-                                               "threshold_range": {'hi': 146, 'lo': 98},
-                                               "close": {'iterations': 5},
-                                               "open": {'kernel_size': 5, 'iterations': 21},
-                                           })
+    img = cv2.imread(base_dir+A[0])
 
-    flood_fill_pipeline = [
-        power_op(),
-        dilate_op(),
-        flood_fill_until_op(),
-    ]
+    def extract_rectangle(img, r):
+        x,y,w,h = r
+        return img[y:y+h, x:x+w]
+
+    def extract_roi(img, region, mask_color=None):
+        region = np.array(region)
+        bb = cv2.boundingRect(region)
+        x, y, w, h = bb
+        roi = extract_rectangle(img, bb)
+        if mask_color is not None:
+            mask = utilities.poly2mask(region-(x,y), roi)
+            roi[np.where(mask == 0)] = mask_color
+        return roi 
+
+    balls = [utilities.extract_circle(img, ball_circle, 30) for ball_circle in metadata["ball_circles"]]
+    balls = list(map(to_gray, balls))
 
     # TODO: Operation representation isn't ideal. See ideas, but it's probably
     #       a bit to gather just by polishing current approach too
@@ -302,7 +480,20 @@ if __name__ == '__main__':
     #       to implement elgantely?
     # IDEA: extract default parameter values using fun.__defaults__
     # IDEA: click to only show image under mouse (enlarged)
-    visualize_pipeline([pick_channel(to_hsv(img), 0) for img in images], 
-                       flood_fill_pipeline,
-                       scale_denom=4, row_count=3
+    # hue_images = [pick_channel(to_hsv(img), 0) for img in images]
+    gray_images = [to_gray(img) for img in A_imgs]
+    gray_pg_images = [extract_roi(img, metadata["playground_poly"], (0)) for img in gray_images]
+    # to_gray(cv2.imread("twisted_checkerboard.png"))
+    visualize_pipeline(gray_pg_images,
+                       # warp_pipeline,
+                       # flood_fill_pipeline,
+                       # iterative_blur_pipeline,
+                       # gradient_pipeline,
+                       # phase_pipeline,
+                       # scale_denom=0.25, row_count=2
+                       [
+                           blur_op(),
+                           hough_op()
+                       ],
+                       scale_denom=3, row_count=2
     )

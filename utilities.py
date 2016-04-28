@@ -69,9 +69,16 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
 
     cv2.imshow(win_name, to_show)
 
-    key = cv2.waitKey(time_ms)
-    if key % 256 == ord('q'):
-        exit(0)
+    while True:
+        key = cv2.waitKey(time_ms)
+        if key % 256 == ord('q'):
+            exit(0)
+
+        if time_ms > 0:
+            break
+
+        if key != 1114091 and key != 1114089: # <win>, <alt> (used to move/resize windows)
+            break
 
     #cv2.destroyWindow(win_name)
     return chr(key%256)
@@ -273,16 +280,16 @@ def select_circles(img):
 
         if len(circles) > 0:
             cur = circles[-1]
-            args = (*cur[0], cur[1])
+            (x,y), r = cur
             new_circle = None
             if key == 'j':
-                new_circle = active_transform(*args, -1,  0)
+                new_circle = active_transform(x, y ,r , -1,  0)
             elif key == 'l':
-                new_circle = active_transform(*args,  1,  0)
+                new_circle = active_transform(x, y ,r ,  1,  0)
             elif key == 'i':
-                new_circle = active_transform(*args,  0, -1)
+                new_circle = active_transform(x, y ,r ,  0, -1)
             elif key == 'k':
-                new_circle = active_transform(*args,  0,  1)
+                new_circle = active_transform(x, y ,r ,  0,  1)
             elif key == 'e':
                 new_circle = (cur[0],cur[1]+1) # radius
             elif key == 'd':

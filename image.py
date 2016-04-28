@@ -12,12 +12,14 @@ class Image:
 
         self.filename = None
         if path is not None:
-            path = utilities.locate_file(path)
+            self.path = utilities.locate_file(path)
 
             self.bgr = cv2.imread(path)
             self.filename = os.path.basename(path)
             if self.bgr is None:
                 raise FileNotFoundError("Unable to load image from {}".format(path))
+        else:
+            self.path = None
 
         if image_data is not None:
             self.bgr = image_data
@@ -45,8 +47,17 @@ class Image:
         self.ycrcb = None
         self.color_space_dict = None
 
+    def get_metadata(self):
+        if self.path is None:
+            return {}
+        return utilities.read_metadata(self.path)
+
     def get_bgr(self, dtype=np.float32):
         return utilities.astype(self.bgr, dtype)
+
+    def get_gray(self, dtype=np.float32):
+        img = cv2.cvtColor(self.bgr, cv2.COLOR_BGR2GRAY)
+        return utilities.astype(img, dtype)
 
     def get_hsv(self, dtype=np.float32):
         if self.hsv is None:
