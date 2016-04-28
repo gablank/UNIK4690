@@ -75,14 +75,17 @@ class Camera(object):
         as_str = "Camera read from: {}\n".format(self._camera_device)
         as_str += "Camera settings:\n"
         as_str += "Resolution: {}x{}\n".format(self._frame_width, self._frame_height)
+        as_str += "Brightness: {}\n".format(self.get(BRIGHTNESS))
+        as_str += "Contrast: {}\n".format(self.get(CONTRAST))
         as_str += "Saturation: {}\n".format(self.get(SATURATION))
+        as_str += "Auto white balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
+        as_str += "White balance temperature: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE))
+        as_str += "Sharpness: {}\n".format(self.get(SHARPNESS))
+        as_str += "Backlight compensation: {}\n".format(self.get(BACKLIGHT_COMPENSATION))
         as_str += "Auto exposure: {}\n".format(self.get(EXPOSURE_AUTO))
         as_str += "Exposure: {}\n".format(self.get(EXPOSURE))
         as_str += "Auto focus: {}\n".format(self.get(FOCUS_AUTO))
         as_str += "Focus: {}\n".format(self.get(FOCUS))
-        as_str += "Brightness: {}\n".format(self.get(BRIGHTNESS))
-        as_str += "Sharpness: {}\n".format(self.get(SHARPNESS))
-        as_str += "Auto white balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE_AUTO))
-        as_str += "White balance: {}\n".format(self.get(WHITE_BALANCE_TEMPERATURE))
+        as_str += "Zoom: {}\n".format(self.get(ZOOM))
 
         return as_str
