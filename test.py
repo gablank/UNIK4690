@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 from os import walk
+import utilities
 
 
 def cmask(center, radius, array):
@@ -103,56 +104,49 @@ def sum_of_squared_gradients(img, mask=None, x_gradient_squared=None, y_gradient
 
 if __name__ == "__main__":
     from image import Image
-    import utilities
-    image1 = Image("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-12_18:43:04.png")
-    image2 = Image("/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-12_19:10:03.png")
+    from transformer import Transformer, mean_diff
 
-    bgr = image2.get_bgr()
-    b = bgr[:,:,0]
-    g = bgr[:,:,1]
-    r = bgr[:,:,2]
-    b_target_average = np.average(image1.get_bgr()[:,:,0])
-    g_target_average = np.average(image1.get_bgr()[:,:,1])
-    r_target_average = np.average(image1.get_bgr()[:,:,2])
-    print(b_target_average, g_target_average, r_target_average)
-    b_ratio = np.average(image1.get_bgr()[:,:,0]) / np.average(image2.get_bgr()[:,:,0])
-    g_ratio = np.average(image1.get_bgr()[:,:,1]) / np.average(image2.get_bgr()[:,:,1])
-    r_ratio = np.average(image1.get_bgr()[:,:,2]) / np.average(image2.get_bgr()[:,:,2])
-    print(b_ratio, g_ratio, r_ratio)
-    b *= b_ratio
-    b[np.where(b > 1.0)] = 1.0
-    g *= g_ratio
-    g[np.where(g > 1.0)] = 1.0
-    r *= r_ratio
-    r[np.where(r > 1.0)] = 1.0
-    image2.bgr = bgr
+    transformer = Transformer(filename="playground_transformer_state.json")
+    try:
+        import os
+        filenames = []
+        for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+            filenames = cur[2]
+            break
 
-    utilities.show(image1.get_bgr(), "image1", text=image1.filename, draw_histograms=True, time_ms=1)
-    utilities.show(image2.get_bgr(), "image2", text=image2.filename, draw_histograms=True)
+        filenames.sort()
 
-    exit(0)
+        for file in filenames:
+            try:
+                import datetime
+                date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+                if date < datetime.datetime(2016, 4, 13, 7, 5):
+                # if date < datetime.datetime(2016, 4, 12, 19, 0):
+                    continue
+                image = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
 
-    filename = "IMG_20160330_155620.jpg"
+            except FileNotFoundError:
+                continue
 
-    img = cv2.imread("images/1920x1080/" + filename)
+            size = 40
+            best_transform = utilities.as_uint8(transformer.get_playground_transformation(image))
+            box = utilities.get_box(best_transform.copy(), side=size)
+            box_hist = utilities.get_histogram(box)
 
-    not_ball = img[690:719, 460:489]
-    # plt.imshow(cv2.cvtColor(not_ball, cv2.COLOR_BGR2RGB), interpolation='bicubic')
-    # plt.show()
+            tot = np.zeros(best_transform.shape[:2]).astype(np.float32)
+            for row in range(0, 1080, size):
+                for col in range(0, 1920, size):
+                    box = best_transform[row:row+size, col:col+size]
+                    cur_box_hist = utilities.get_histogram(box)
+                    tot[row:row+size, col:col+size] = cv2.compareHist(box_hist, cur_box_hist, cv2.HISTCMP_CORREL)
 
-    # ball = img[649:678, 436:465]
-    ball = img[640:698, 430:485]
-    # ball = img[688:698, 478:485]
-    # plt.imshow(cv2.cvtColor(ball, cv2.COLOR_BGR2RGB), interpolation='bicubic')
-    # plt.show()
+            tot -= np.amin(tot)
+            tot *= 1/np.amax(tot)
+            utilities.show(tot, "Finished", time_ms=1)
 
-    print(sum_of_squared_gradients(not_ball))
-    print(sum_of_squared_gradients(ball))
 
-    # cv2.imshow("test", img)
-    # cv2.waitKey(0)
-
-    radius, x, y = minimize_sum_of_squared_gradients(ball)
-    cv2.circle(ball, (int(x), int(y)), radius, [255,0,0])
-    cv2.imshow("test", ball)
-    cv2.waitKey(0)
+            # utilities.show(best_transform, time_ms=10, text=img.filename)
+    except Exception as e:
+        import traceback
+        print(e)
+        traceback.print_tb(e.__traceback__)
