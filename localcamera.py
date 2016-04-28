@@ -6,6 +6,7 @@ This file must be compatible with Python 2 and 3!
 import camera
 import cv2
 import subprocess
+import image
 
 _v4l2_cmd = "v4l2-ctl"
 _v4l2_select_device = "-d"
@@ -40,7 +41,7 @@ class LocalCamera(camera.Camera):
         # Make sure any new settings have been applied
         for _ in range(8):
             self.cap.read()
-        return self.cap.read()[1]
+        return image.Image(image_data=self.cap.read()[1])
 
     def set_defaults(self):
         self.set_resolution(1920, 1080)
