@@ -42,21 +42,6 @@ class LocalCamera(camera.Camera):
             self.cap.read()
         return self.cap.read()[1]
 
-    def set_defaults(self):
-        self.set_resolution(1920, 1080)
-        self.set(camera.BRIGHTNESS, 110)
-        self.set(camera.CONTRAST, 5)
-        self.set(camera.SATURATION, 100)
-        self.set(camera.WHITE_BALANCE_TEMPERATURE_AUTO, 0)
-        self.set(camera.WHITE_BALANCE_TEMPERATURE, 5000)
-        self.set(camera.SHARPNESS, 50)
-        self.set(camera.BACKLIGHT_COMPENSATION, 0)
-        self.set(camera.EXPOSURE_AUTO, 1)  # Not a bool, but mapping. 1 means manual, 3 is auto
-        self.set(camera.EXPOSURE, 1)
-        self.set(camera.FOCUS_AUTO, 0)
-        self.set(camera.FOCUS, 0)
-        self.set(camera.ZOOM, 0)
-
     def set(self, property, value):
         property_string = property
 
