@@ -280,16 +280,16 @@ def select_circles(img):
 
         if len(circles) > 0:
             cur = circles[-1]
-            args = (*cur[0], cur[1])
+            (x,y), r = cur
             new_circle = None
             if key == 'j':
-                new_circle = active_transform(*args, -1,  0)
+                new_circle = active_transform(x, y ,r , -1,  0)
             elif key == 'l':
-                new_circle = active_transform(*args,  1,  0)
+                new_circle = active_transform(x, y ,r ,  1,  0)
             elif key == 'i':
-                new_circle = active_transform(*args,  0, -1)
+                new_circle = active_transform(x, y ,r ,  0, -1)
             elif key == 'k':
-                new_circle = active_transform(*args,  0,  1)
+                new_circle = active_transform(x, y ,r ,  0,  1)
             elif key == 'e':
                 new_circle = (cur[0],cur[1]+1) # radius
             elif key == 'd':
