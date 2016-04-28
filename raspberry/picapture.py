@@ -21,17 +21,18 @@ class CameraCaptureHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                     value = int(value_list[0])
                     if property == "width":
                         frame_width = value
-                    if property == "height":
+                    elif property == "height":
                         frame_height = value
-                    cam.set(property, value)
+                    else:
+                        cam.set(property, value)
 
                 if frame_width is not None and frame_height is not None:
                     cam.set_resolution(frame_width, frame_height)
 
-                bgr = cam.capture()
+                image = cam.capture()
                 print(cam)
 
-            cv2.imwrite("image.png", bgr)
+            cv2.imwrite("image.png", image.get_bgr())
             self.path = "image.png"
 
             return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
