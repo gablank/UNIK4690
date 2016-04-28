@@ -23,7 +23,6 @@ class Camera(object):
     def __init__(self):
         self._frame_width = None
         self._frame_height = None
-        self._camera_device = "Unknown"
         self.set_defaults()
 
     def capture(self):
