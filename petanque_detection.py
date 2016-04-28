@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from playground_detection.red_balls import RedBallPlaygroundDetector
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
 from playground_detection.manual_playground_detector import ManualPlaygroundDetector
