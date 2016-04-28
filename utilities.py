@@ -462,7 +462,8 @@ def transform_image(image, vec):
         if transformed is None:
             transformed = np.zeros(image_space_data.shape[:2])
 
-        transformed += vec[image_space_name] * image_space_data
+        if image_space_name in vec:
+            transformed += vec[image_space_name] * image_space_data
 
     # Normalization
     res = transformed - np.amin(transformed)
