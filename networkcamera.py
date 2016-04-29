@@ -70,6 +70,51 @@ class NetworkCamera(camera.Camera):
         pass
 
 
+def record_time_lapse():
+    import datetime
+    import utilities
+    import image
+    import time
+    dir = "images/red_balls/series-1/"
+    with NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+        params = {
+            "saturation" : [100, 150, 200],
+            "exposure_absolute" : [5,10,20],
+            "brightness" : [20, 40, 80],
+        }
+        def paramstring():
+            p = []
+            for key in params.keys():
+                p.append("{}={}".format(key, str(cam.settings[key])))
+            return ",".join(p)
+
+        while True:
+            import utilities
+            for sat in params["saturation"]:
+                for exp in params["exposure_absolute"]:
+                    for bri in params["brightness"]:
+                        begin = datetime.datetime.now()
+                        print("capture start")
+                        cam.settings["saturation"] = sat
+                        cam.settings["exposure_absolute"] = exp
+                        cam.settings["brightness"] = bri
+                        frame = cam.capture()
+
+                        ts_string = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+                        filename = "{}-{}.png".format(ts_string, paramstring())
+                        file_path = dir+filename
+                        cv2.imwrite(file_path, frame)
+                        # BUG: doesn't work if there's common metadata (metadata.json) in the dir
+                        utilities.update_metadata(file_path, cam.settings)
+
+                        end = datetime.datetime.now()
+                        elapsed_s = (end-begin).total_seconds()
+
+                        print("capture took:", elapsed_s)
+                        time.sleep(max(0, 30-elapsed_s))
+
+
+
 if __name__ == "__main__":
     with NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
         while True:
