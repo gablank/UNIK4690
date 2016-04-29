@@ -135,8 +135,11 @@ def interactive_set_metadata(img_path, key, use_dir_metadata=True):
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         path = sys.argv[1]
-        what = sys.argv[2] # key in metadata
+        what = sys.argv[2] if len(sys.argv) > 2 else "*" # key in metadata
 
 
-
-    interactive_set_metadata(path, what)
+    if what == "*":
+        for what in ["playground_poly", "ball_circles", "red_ball_circles"]:
+            interactive_set_metadata(path, what)
+    else:
+        interactive_set_metadata(path, what)
