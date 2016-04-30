@@ -39,8 +39,8 @@ class RaspberryCamera(camera.Camera):
         return 0
 
     def set_resolution(self, width, height):
-        self._frame_width = width
-        self._frame_height = height
+        self._frame_width = int(width)
+        self._frame_height = int(height)
 
     def get_resolution(self):
         return self._frame_width, self._frame_height
