@@ -17,7 +17,7 @@ _set_frame_size_cmd = "--set-fmt-video=width={},height={}"
 _get_frame_size_cmd = "--get-fmt-video"
 
 
-class LocalCamera(camera.Camera):
+class LifeCamStudioCamera(camera.Camera):
     def __init__(self, camera_idx=None):
         if camera_idx is None:
             camera_idx = self._detect_microsoft_lifecam()
@@ -34,7 +34,7 @@ class LocalCamera(camera.Camera):
         self.camera_idx = camera_idx
         self._camera_device = _camera_device.format(self.camera_idx)
 
-        super(LocalCamera, self).__init__()
+        super(LifeCamStudioCamera, self).__init__()
 
     def capture(self):
         # Make sure any new settings have been applied
@@ -129,7 +129,7 @@ class LocalCamera(camera.Camera):
 
 
 if __name__ == "__main__":
-    with LocalCamera() as camera:
+    with LifeCamStudioCamera() as camera:
 
         while True:
             import utilities
