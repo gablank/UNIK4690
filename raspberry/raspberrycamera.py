@@ -11,6 +11,12 @@ import io
 import numpy as np
 
 
+"""
+Available settings:
+https://picamera.readthedocs.io/en/release-1.10/api_camera.html
+"""
+
+
 class RaspberryCamera(camera.Camera):
     def __init__(self):
         self._camera_device = "Raspberry Pi camera"
