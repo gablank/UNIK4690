@@ -599,6 +599,32 @@ def distance(pt1, pt2):
     import math
     return math.sqrt((pt1[0]-pt2[0])**2 + (pt1[1]-pt2[1])**2)
 
+def Timed(fn):
+    """
+    Decorator to print duration of function calls
+    """
+    def wrapped(*args, **kwargs):
+        timer = Timer()
+        ret = fn(*args, **kwargs)
+        print("%s took: %s" % (fn, timer))
+        return ret
+    return wrapped
+
+# @Timed
+def polygon_symmetric_diff(a, b):
+    """
+    Returns the symmetric difference between the two polygons. Ie. pixel count not shared by both polygons.
+    NB: Probably assumes convex polygons
+    """
+    # Brute force approach. Make masks for each polygon and count the pixels in the symmetric difference
+    x,y,w,h = cv2.boundingRect(np.concatenate((a,b)))
+    a = a - (x,y)
+    b = b - (x,y)
+    a_mask = poly2mask(a, (h,w))
+    b_mask = poly2mask(b, (h,w))
+    sym_diff = cv2.bitwise_xor(a_mask, b_mask)
+    return np.count_nonzero(sym_diff)
+
 
 if __name__ == "__main__":
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png", "24h/south/2016-04-13_09:03:03.png", "24h/south/2016-04-13_12:45:04.png"]
