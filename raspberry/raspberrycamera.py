@@ -29,6 +29,7 @@ class RaspberryCamera(camera.Camera):
 
     def capture(self):
         stream = io.BytesIO()
+        import time
         with picamera.PiCamera() as cam:
             # Apply settings
             cam.resolution = (self._frame_width, self._frame_height)
@@ -38,9 +39,16 @@ class RaspberryCamera(camera.Camera):
             cam.start_preview()
             # Let the camera warm up
             time.sleep(2)
+            print "finished sleeping", time.time()
             cam.capture(stream, format="png")
+
+        print "finished capturing", time.time()
         data = np.fromstring(stream.getvalue(), dtype=np.uint8)
+
+        print "finished fromstring", time.time()
         bgr = cv2.imdecode(data, 1)
+
+        print "finished decode", time.time()
         return bgr
 
     def set(self, property, value):
