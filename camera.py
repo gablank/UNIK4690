@@ -21,8 +21,8 @@ ZOOM \
 
 class Camera(object):
     def __init__(self):
-        self._frame_width = None
-        self._frame_height = None
+        self._frame_width = 1920
+        self._frame_height = 1080
 
     def capture(self):
         raise NotImplementedError

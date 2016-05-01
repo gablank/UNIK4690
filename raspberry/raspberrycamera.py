@@ -21,9 +21,6 @@ class RaspberryCamera(camera.Camera):
     def __init__(self):
         self._camera_device = "Raspberry Pi camera"
 
-        self._frame_width = 1920
-        self._frame_height = 1080
-
         self._settings = {}
 
         self._get_settings()
