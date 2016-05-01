@@ -116,7 +116,7 @@ def record_time_lapse():
 
 
 if __name__ == "__main__":
-    with NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+    with NetworkCamera("http://31.45.53.135:1337/raspberry_image.png") as cam:
         while True:
             import utilities
             frame = cam.capture()
