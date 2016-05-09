@@ -623,7 +623,12 @@ def polygon_symmetric_diff(a, b):
     a_mask = poly2mask(a, (h,w))
     b_mask = poly2mask(b, (h,w))
     sym_diff = cv2.bitwise_xor(a_mask, b_mask)
-    return np.count_nonzero(sym_diff)
+    return np.count_nonzero(sym_diff), (a_mask, b_mask)
+
+def playground_score(known, detected):
+    diff, masks = polygon_symmetric_diff(known, detected)
+    known_area = masks[0]
+    return 1.0 - diff/np.count_nonzero(known_area)
 
 def matching_balls(known, detected, match_threshold_factor=1.0):
     """
