@@ -479,6 +479,8 @@ if __name__ == "__main__":
 
     try:
         for file in filenames:
+            if not file.endswith(".png"):
+                continue
             try:
                 import datetime
                 date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")

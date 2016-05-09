@@ -625,6 +625,63 @@ def polygon_symmetric_diff(a, b):
     sym_diff = cv2.bitwise_xor(a_mask, b_mask)
     return np.count_nonzero(sym_diff)
 
+def matching_balls(known, detected, match_threshold_factor=1.0):
+    """
+    known: [(center, r), ...]
+    detected:      [center, ...]
+    match_threshold_factor: a ball x is considered a match of y if |x-y| < x_r*thresh
+
+    We don't distinguish between ball types here.
+
+    In this version we simply go through the known ball, matching them with the
+    best match. No ball will be matched more than once.
+
+    This doesn't necessarily maximize the score though:
+
+    Should we attempt to find the optimal pairing? 
+
+    Illustrative example: 
+    *..O.*..O...*
+    a  A b  B   c
+
+    Assuming the radius of both A and B is 3 (...) should we attempt to pair B with b
+    and A with a? Even though b match better with A.
+
+    Or should b match with both A and B?
+    Similarily: should A match with both a and b?
+    """
+    # There's only a few balls so we don't do anything fancy here yet
+
+    matches = []
+    unmatched = list(detected)
+
+    for ball in known:
+        center, r = ball
+        match_idx, best_match = min(enumerate(unmatched), key=lambda x: distance(center, x[1]))
+        d = distance(center, best_match)
+        if d < r*match_threshold_factor:
+            matches.append((ball, best_match))
+            del unmatched[match_idx]
+
+    return matches
+
+
+def ball_detection_score(known, detected):
+    # Three kinda of errors: (1) ball not detected at all, (2) offset from hand-detected center, (3) non-ball detected
+    #
+    # Only consider error 1 and 3 here
+    #
+    # Muliple possible scoring criteria:
+    # - precision (same as accuracy in this case)
+    # - recall
+    # - F-score
+    match_count = len(matching_balls(known, detected))
+
+    recall = match_count / len(known) 
+    precision = match_count / len(detected) 
+    # F-score, beta = 1:
+    return 2*recall*precision / (recall + precision), len(detected)
+
 
 if __name__ == "__main__":
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png", "24h/south/2016-04-13_09:03:03.png", "24h/south/2016-04-13_12:45:04.png"]
