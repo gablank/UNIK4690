@@ -69,40 +69,55 @@ class RedBallPlaygroundDetector:
     def detect(self, image):
         # Quick and dirty from pipeline_visualizer
         params = {
-            "trans": {'exponent': 4.87},
+            "trans": {'exponent': 5},
             "blob": {'minArea': 15, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
         }
         img = red_ball_transform(image, **params["trans"])
-        _, kps = blob_detector(img, **params["blob"])
+        kps = blob_detector(img, **params["blob"])
 
         points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 
 
-        ## Find a correct ordering of the points
-        # from flood_fill.py
-        lines = []
-        for idx, pt1 in enumerate(points):
-            lines.append((pt1, points[(idx + 1) % len(points)]))
+        # Now we need to pair the detected points with the known real
+        # world playground coordinates.
+        #
+        # We assume that the playground is a regular 2x6 rectangle and that the
+        # camera angle is such that we can assume the longest lines in the
+        # image corresponds to a long side in the real world.
+        #
+        # Note that we don't actually need exact pairing since we don't care
+        # what's up and what's down. Ie. as long as the orientation and
+        # short/long linesegment ordering is the same we're good.
+        #
+        # The real-world coordintaes are given clockwise long-short-long-short
 
-        # sort by line length
-        lines.sort(key=lambda x: (x[0][0]-x[1][0])**2 + (x[0][1]-x[1][1])**2)
+        # First we find a ordering such that the resulting polygon has no crossing lines.
+        # .. and oriented correct.
+        
+        convex_hull = cv2.convexHull(np.array(points), clockwise=True)
 
-        print("Lines:", lines)
+        def cv_convex_hull_to_list(convex_hull):
+            """
+            cv2.convectHull wraps the points in extra lists for some reason.
+            Unwrap and return as a python lists (of tuples) instead of a numpy array
+            """
+            convex_hull_as_list = []
+            for idx in range(len(convex_hull)):
+                vertex = convex_hull[idx][0]
+                convex_hull_as_list.append((vertex[0], vertex[1]))
+            return convex_hull_as_list
 
-        # shortest line is probably one of the short sides
-        short_side = lines[0]
-        # sides_in_order: First one of the short sides, then a long side, then the other short side, then the last long side
+        points = cv_convex_hull_to_list(convex_hull)
 
-        # OJB: When we've selected the shortest line (p1, p2), proceed by finding the shortest line from one of the points (p1, p2) ?
+        # Then we make sure the first line segment is the longest:
+        # a,b,c,d
+        # a,b  b,c  c,d  d,a
+        longest_i, _ = max(enumerate(zip(points, points[1:]+points[0:1])),
+                           key=lambda line_entry: utilities.distance(line_entry[1][0], line_entry[1][1]))
 
-        sides_in_order = [short_side[0], short_side[1]]
-        while len(sides_in_order) < 4:
-            for line in lines:
-                if len(sides_in_order) >= 4:
-                    break
-                if sides_in_order[-1] == line[0]:
-                    sides_in_order.append(line[1])
+        points = points[longest_i:] + points[:longest_i]
 
-        # show_lines(image, sides_in_order)
-        return sides_in_order
+        return points
+
+
         
