@@ -77,7 +77,7 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
         if time_ms > 0:
             break
 
-        if key != 1114091 and key != 1114089: # <win>, <alt> (used to move/resize windows)
+        if key not in (1114091, 1114089, 65515): # <win>, <alt> (used to move/resize windows)
             break
 
     #cv2.destroyWindow(win_name)
