@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import numpy as np
 import cv2
@@ -10,9 +11,7 @@ from glob import glob
 import math
 from image import Image
                          
-from utilities import two_point_rect_to_bb
 
-# Might be some one off errors in pixel handling here
 
 def test_circle_drawing():
     canvas = np.zeros((20,20,3))
@@ -25,15 +24,16 @@ def test_circle_drawing():
 
 
 def ball_histogram_fun():
+    # Might be some one off errors in pixel handling here (in general)
+
+    from utilities import extract_circle
+
     filenames = glob(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/*.png"))
     filenames.sort()
     metadata = read_metadata(os.path.dirname(filenames[0]))
     if "ball_circles" not in metadata:
         interactive_set_metadata(os.path.dirname(filenames[0]), "ball_circles")
 
-    # ball_bbs = ([two_point_rect_to_bb(*bb) for bb in metadata["ball_bbs"]])
-    # ball_bbs = sorted(ball_bbs, key=lambda bb: bb[2:])
-    # ball_bbs = np.array(ball_bbs)
     balls = np.array(sorted(metadata["ball_circles"], key=lambda c: c[1]))
 
     ball_count = len(balls)
@@ -133,6 +133,7 @@ def interactive_set_metadata(img_path, key, use_dir_metadata=True):
 
 
 if __name__ == '__main__':
+
     if len(sys.argv) > 1:
         path = sys.argv[1]
         what = sys.argv[2] if len(sys.argv) > 2 else "*" # key in metadata
@@ -140,6 +141,7 @@ if __name__ == '__main__':
 
     if what == "*":
         for what in ["playground_poly", "ball_circles", "red_ball_circles"]:
+            print(what)
             interactive_set_metadata(path, what)
     else:
         interactive_set_metadata(path, what)

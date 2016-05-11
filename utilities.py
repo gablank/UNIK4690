@@ -690,6 +690,35 @@ def ball_detection_score(known, detected):
     return 2*recall*precision / (recall + precision), len(detected)
 
 
+
+def circle_bb(circle):
+    """
+    Bounding box of a circle represeted by ((cx,cy), r)
+    """
+    (cx,cy), r = circle
+    x, y = cx-r, cy-r
+
+    # How to interpret radius and center in a pixel world?
+    # Kinda makes sense to to force odd diameter, but seems like opencv don't do that.
+    # https://github.com/Itseez/opencv/blob/2f4e38c8313ff313de7c41141d56d945d91f47cf/modules/imgproc/src/drawing.cpp#L1411
+    # See test_circle_drawing
+    # (---+---) or (---+--)
+    w = r*2
+    h = w
+    return (x,y,w,h)
+
+def extract_circle(img, circle, margin=0, mask_color=None):
+    (cx, cy), r = circle
+    x, y, h, w = circle_bb(((cx, cy), r+margin))
+    roi = img[y:y+h, x:x+w]
+    if mask_color:
+        mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.circle(mask, (cx-x, cy-y), r, 255, -1)
+        roi[np.where(mask == 0)] = mask_color
+    return roi
+
+
+
 if __name__ == "__main__":
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png", "24h/south/2016-04-13_09:03:03.png", "24h/south/2016-04-13_12:45:04.png"]
     images = list(map(cv2.imread, ["images/microsoft_cam/"+img_path for img_path in img_paths]))
