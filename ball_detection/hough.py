@@ -21,7 +21,10 @@ class HoughBallDetector:
         gray = cv2.blur(gray, (blur_size, blur_size))
         circles = hough(gray, **params["hough"])
 
-        balls = [((c[0], c[1]), 1) for c in circles[0,:].astype(np.int32)]
-        balls[0] = ((balls[0][0]), 0) # arbitrary pig
+        if circles is not None:
+            balls = [((c[0], c[1]), 1) for c in circles[0,:].astype(np.int32)]
+            balls[0] = ((balls[0][0]), 0) # arbitrary pig
+        else:
+            balls = [((0,0), 0)]
 
         return balls
