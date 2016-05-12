@@ -10,6 +10,46 @@ logging.basicConfig() # omg..
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+from utilities import distance
+
+def simple_keypoint_filter(kps):
+    """
+    The surf detector often finds multiple key points close to each other.
+    Here we simply looks naively for overlapping points reducing each "cluster"
+    to just one point. (Selecting the largest one)
+    This seems to work for some common cases at least.
+    """
+    if len(kps) > 150:
+        print("Not dimensioned for huge number of key points O(N^2)")
+        return kps
+
+    def overlapping(it, kps):
+        # NB: includes itself in result
+        overlaps = []
+        complement = []
+        for kp in kps:
+            dist = distance(it.pt, kp.pt)
+            # Assuming 'size' is the radius (?)
+            if dist < kp.size+it.size:
+                overlaps.append(kp)
+            else:
+                complement.append(kp)
+
+        return overlaps, complement
+
+    filtered = []
+
+    kps = sorted(kps, key=lambda kp: kp.size)
+    # We don't find transitive overlaps, but we do check the largest key points first
+    while len(kps) > 0:
+        kp = kps[-1]
+        cluster, kps = overlapping(kp, kps)
+        # Note the key points also have a 'response' field.
+        filtered.append(max(cluster, key=lambda kp: kp.size))
+
+    return filtered
+
+
 def red_ball_transform(image, exponent=1):
     if type(image) == Image:
         img = image.get_ycrcb(np.float32)
@@ -23,6 +63,9 @@ def red_ball_transform(image, exponent=1):
     # purpose!
     Cr = img[:,:,1]
 
+    return red_ball_power_threshold(Cr, exponent)
+
+def red_ball_power_threshold(Cr, exponent):
     # Exponentiating the Cr channel (as a float image [0,1]) creates sort of a soft threshold.
     # (Suppressing darker values)
     Cr = np.power(Cr, exponent)
@@ -49,10 +92,30 @@ def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blo
     kpLight = lightBlobDetector.detect(img)
     return kpLight
 
+
+def normalize_image(img):
+    """
+    Normalize a image so that the whole dynamic range (correct term?) is used.
+    Assumes img is np.uint image.
+    """
+    img = img - np.min(img)
+    img = img.astype(np.float32) / np.max(img)
+    return np.round(img * 255).astype(np.uint8)
+
+def threshold_rel(img, ratio, threshold_type=cv2.THRESH_BINARY):
+    t = round(np.max(img)*ratio)
+    return cv2.threshold(img, t, 255, threshold_type)[1]
+
 ## Works well, but sometimes find multiple hits per red ball
-def surf_detector(img):
-    surf = cv2.xfeatures2d.SURF_create(2500, upright=True)
+def surf_detector(img, hess_thresh=3000):
+    surf = cv2.xfeatures2d.SURF_create(hess_thresh, upright=True) #, nOctaves=10)
     kps = surf.detect(img)
+
+    # print("%s keypoints" % len(kps))
+    kps = simple_keypoint_filter(kps)
+    # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+    # print("----------")
+
     return kps
 
 class RedBallPlaygroundDetector:
@@ -64,18 +127,34 @@ class RedBallPlaygroundDetector:
 
     def detect(self, image):
 
-        # Quick and dirty from pipeline_visualizer
-        params = {
-            "trans": {'exponent': 5},
+        def blob():
+            # Quick and dirty from pipeline_visualizer
+            params = {
+                "trans": {'exponent': 5},
 
-            # Works best with lifecam south images:
-            "blob": {'minArea': 15, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
+                # Works best with lifecam south images:
+                "blob": {'minArea': 15, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
 
-            # Works best with rasberry west images:
-            # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
-        }
-        img = red_ball_transform(image, **params["trans"])
-        kps = blob_detector(img, **params["blob"])
+                # Works best with rasberry west images:
+                # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
+            }
+            img = red_ball_transform(image, **params["trans"])
+            kps = blob_detector(img, **params["blob"])
+
+            return kps
+
+        def surf():
+            # Works well for rasberry west
+            Cr = image.get_ycrcb(np.uint8)[:,:,1]
+            temp = Cr
+            # temp = threshold_rel(Cr, 208/255)
+            temp = normalize_image(temp)
+            temp = red_ball_power_threshold(temp/255.0, 5)
+            kps = surf_detector(temp, hess_thresh=4000)
+            # utilities.show(temp, keypoints=kps)
+            return kps
+
+        kps = surf()
 
         points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 
