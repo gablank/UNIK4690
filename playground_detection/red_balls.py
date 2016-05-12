@@ -3,41 +3,39 @@ import cv2
 import numpy as np
 import utilities
 from image import Image
+import logging
 
+
+logging.basicConfig() # omg..
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def red_ball_transform(image, exponent=1):
     if type(image) == Image:
-        img = image.get_ycrcb()
+        img = image.get_ycrcb(np.float32)
     else:
+        # Assume image is a bgr 8bit ycrcb image (to please pipeline_visualizer..)
         img = image
         img = img.astype(np.float32)
         img *= 1./255
 
-    Y = img[:,:,1]
+    # YCrCb color space should be suited for detect red objects. A whole channel just for our
+    # purpose!
+    Cr = img[:,:,1]
 
-    Yp = np.power(Y, exponent)
+    # Exponentiating the Cr channel (as a float image [0,1]) creates sort of a soft threshold.
+    # (Suppressing darker values)
+    Cr = np.power(Cr, exponent)
 
-    amax = np.amax(Yp)
-    light = Yp / amax
+    amax = np.amax(Cr)
+    light = Cr / amax
     light *= 255
     light = np.clip(light, 0, 255)
     light = light.astype(np.uint8)
 
     return light
 
-    # return img[:,:,1]
-    # utilities.show(img[:,:,1])
-    # img = img.astype(np.float32)
-    # img = img[:,:,1] + img[:,:,0]
-    # utilities.show(img)
-    # print(img.shape)
-    # img = np.round(img / np.max(img))
-    # img = img.astype(np.uint8)
-    # return img
-
 def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blobColor = 255):
-
-    # Use hue and saturation
     lightBlobParams = cv2.SimpleBlobDetector_Params()
     lightBlobParams.filterByArea = True
     lightBlobParams.minArea = minArea
@@ -48,9 +46,7 @@ def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blo
     lightBlobParams.filterByConvexity = False
     lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
 
-    # out = np.array((img.shape[0], img.shape[1], 3), dtype=np.uint8)
     kpLight = lightBlobDetector.detect(img)
-    # out = cv2.drawKeypoints(img, kpLight, None, color=[0, 0, 255])
     return kpLight
 
 ## Works well, but sometimes find multiple hits per red ball
@@ -67,15 +63,25 @@ class RedBallPlaygroundDetector:
         self.petanque_detection = petanque_detection
 
     def detect(self, image):
+
         # Quick and dirty from pipeline_visualizer
         params = {
             "trans": {'exponent': 5},
+
+            # Works best with lifecam south images:
             "blob": {'minArea': 15, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
+
+            # Works best with rasberry west images:
+            # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
         }
         img = red_ball_transform(image, **params["trans"])
         kps = blob_detector(img, **params["blob"])
 
         points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
+
+        if len(points) != 4:
+            logger.debug("Found fewer than/more than 4 point (%s)", len(points))
+            raise RuntimeError("Could not detect playground")
 
 
         # Now we need to pair the detected points with the known real
@@ -84,14 +90,18 @@ class RedBallPlaygroundDetector:
         # We assume that the playground is a regular 2x6 rectangle and that the
         # camera angle is such that we can assume the longest lines in the
         # image corresponds to a long side in the real world.
+        # NB: This doesn't hold for the rasberry west images :(
+        #
+        # We also assume we have exactly 4 detected points.
         #
         # Note that we don't actually need exact pairing since we don't care
         # what's up and what's down. Ie. as long as the orientation and
         # short/long linesegment ordering is the same we're good.
         #
-        # The real-world coordintaes are given clockwise long-short-long-short
+        # The real-world coordintaes are given clockwise with
+        # long-short-long-short line segment ordering.
 
-        # First we find a ordering such that the resulting polygon has no crossing lines.
+        # First we find a ordering such that the resulting polygon has no crossing lines
         # .. and oriented correct.
         
         convex_hull = cv2.convexHull(np.array(points), clockwise=True)
@@ -119,5 +129,3 @@ class RedBallPlaygroundDetector:
 
         return points
 
-
-        
