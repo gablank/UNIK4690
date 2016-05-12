@@ -499,7 +499,7 @@ if __name__ == "__main__":
                 continue
             try:
                 import datetime
-                date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
+                # date = datetime.datetime.strptime(file, "%Y-%m-%d_%H:%M:%S.png")
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
@@ -509,7 +509,11 @@ if __name__ == "__main__":
             except ValueError:
                 continue
 
-            petanque_detection.detect(image)
+            try:
+                petanque_detection.detect(image)
+            except RuntimeError as e:
+                print(e)
+                
     except Exception as e:
         import traceback
         print(e)
