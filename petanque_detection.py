@@ -459,23 +459,39 @@ if __name__ == "__main__":
     # petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
     #                                        BallDetector=HoughBallDetector
     # )
-    import networkcamera
 
-    with networkcamera.NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
-        while True:
-            frame = cam.capture()
-            image = Image(image_data=frame)
-
-            petanque_detection.detect(image)
-
-    # try:
     import os
+    import sys
+    from glob import glob
     filenames = []
-    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
-        filenames = cur[2]
-        break
 
-    filenames.sort()
+    use_camera = False
+
+    if len(sys.argv) > 1:
+        filenames = sys.argv
+
+    elif use_camera:
+        import networkcamera
+
+        with networkcamera.NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+            while True:
+                frame = cam.capture()
+                image = Image(image_data=frame)
+
+                petanque_detection.detect(image)
+        exit(0)
+
+    else:
+        # for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+        #     filenames = cur[2]
+        #     break
+
+        # filenames = glob("images/microsoft_cam/red_balls/*brightness=40,exposure_absolute=10,saturation=10.png")
+        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
+        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
+        filenames = glob("images/microsoft_cam/24h/south/*png")
+
+        filenames.sort()
 
     try:
         for file in filenames:
@@ -499,4 +515,5 @@ if __name__ == "__main__":
         print(e)
         traceback.print_tb(e.__traceback__)
     finally:
-        petanque_detection.playground_detector.transformer.save(filename="playground_transformer_state.json")
+        if hasattr(petanque_detection.playground_detector, "transformer"):
+            petanque_detection.playground_detector.transformer.save(filename="playground_transformer_state.json")
