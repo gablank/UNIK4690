@@ -33,7 +33,7 @@ def draw_label(to_show, text):
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
 
 
-def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False):
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None):
     """
     Show img in a window
     """
@@ -43,6 +43,10 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
 
     to_show = img.copy()
     to_show = as_uint8(to_show)
+
+    if keypoints is not None:
+        to_show = cv2.drawKeypoints(to_show, keypoints, None,
+                                    flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
     if text is not None:
         draw_label(to_show, text)
@@ -716,6 +720,9 @@ def extract_circle(img, circle, margin=0, mask_color=None):
         cv2.circle(mask, (cx-x, cy-y), r, 255, -1)
         roi[np.where(mask == 0)] = mask_color
     return roi
+
+def pretty_print_keypoint(kp):
+    return "<(%.0f, %.0f), %d, %.1f, %d>" % (kp.pt[0], kp.pt[1], kp.size, kp.response, kp.octave)
 
 
 
