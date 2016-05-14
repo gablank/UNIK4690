@@ -33,13 +33,15 @@ def draw_label(to_show, text):
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
 
 
-def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None):
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False):
     """
     Show img in a window
     """
     if fullscreen:
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    elif scale:
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL|cv2.WINDOW_KEEPRATIO)
 
     to_show = img.copy()
     to_show = as_uint8(to_show)
