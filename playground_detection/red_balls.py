@@ -12,7 +12,7 @@ logger.setLevel(logging.DEBUG)
 
 from utilities import distance
 
-def simple_keypoint_filter(kps):
+def keypoint_filter_overlapping(kps):
     """
     The surf detector often finds multiple key points close to each other.
     Here we simply looks naively for overlapping points reducing each "cluster"
@@ -112,11 +112,21 @@ def surf_detector(img, hess_thresh=3000):
     kps = surf.detect(img)
 
     # print("%s keypoints" % len(kps))
-    kps = simple_keypoint_filter(kps)
+    kps = keypoint_filter_overlapping(kps)
     # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
     # print("----------")
 
     return kps
+
+def make_debug_toggable(fn):
+    import os
+    def wrapped(*args, **kwargs):
+        if os.environ.get("DEBUG", "0") == "0":
+            return
+        fn(*args, **kwargs)
+
+    return wrapped
+
 
 class RedBallPlaygroundDetector:
     """
@@ -143,15 +153,22 @@ class RedBallPlaygroundDetector:
 
             return kps
 
+        show = make_debug_toggable(utilities.show)
+
         def surf():
-            # Works well for rasberry west
+            # Works well for rasberry west:
+            # image.py no color normalization
             Cr = image.get_ycrcb(np.uint8)[:,:,1]
             temp = Cr
             # temp = threshold_rel(Cr, 208/255)
             temp = normalize_image(temp)
+            show(temp, scale=True)
             temp = red_ball_power_threshold(temp/255.0, 5)
+            show(temp, scale=True)
             kps = surf_detector(temp, hess_thresh=4000)
-            # utilities.show(temp, keypoints=kps)
+            # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
+            print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+            show(temp, keypoints=kps, scale=True)
             return kps
 
         kps = surf()
@@ -198,13 +215,21 @@ class RedBallPlaygroundDetector:
 
         points = cv_convex_hull_to_list(convex_hull)
 
-        # Then we make sure the first line segment is the longest:
+        # Then we make sure the first line segment "long". Seems to be more robust to assume
+        # the shortest segment actually is short (as opposed to the longest being "long"). At
+        # least on the images we've taken so far.
         # a,b,c,d
         # a,b  b,c  c,d  d,a
-        longest_i, _ = max(enumerate(zip(points, points[1:]+points[0:1])),
+
+        shortest_i, _ = min(enumerate(zip(points, points[1:]+points[0:1])),
                            key=lambda line_entry: utilities.distance(line_entry[1][0], line_entry[1][1]))
 
-        points = points[longest_i:] + points[:longest_i]
+
+
+        # short-long-short-long
+        points = points[shortest_i:] + points[:shortest_i]
+        # rotate one to the right so we get a long segment first
+        points = points[-1:] + points[:-1]
 
         return points
 
