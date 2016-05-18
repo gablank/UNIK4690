@@ -405,7 +405,7 @@ class PetanqueDetection:
         # Then multiply them together to get the homography from the playground_image to real world
         w_H_p = np.dot(w_H_i, i_H_p)
 
-        return Image(image_data=playground_bgr, color_normalization=False), w_H_p
+        return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p
 
     def _draw_distance_to_pig(self, image, balls,
                               w_H_i,
@@ -503,7 +503,7 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, color_normalization=False)
+                image = Image(file, histogram_equalization=None)
             except FileNotFoundError:
                 continue
             except ValueError:

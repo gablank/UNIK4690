@@ -6,7 +6,7 @@ import os
 
 
 class Image:
-    def __init__(self, path=None, image_data=None, color_normalization=True):
+    def __init__(self, path=None, image_data=None, histogram_equalization="rg_chromaticity"):
         if (path is None and image_data is None) or (path is not None and image_data is not None):
             raise RuntimeError("One and only one of path and image_data may be not None!")
 
@@ -24,7 +24,7 @@ class Image:
         if image_data is not None:
             self.bgr = image_data
 
-        if color_normalization:
+        if histogram_equalization == "rg_chromaticity":
             # rg chromaticity: normalized rgb
             bgr = self.get_bgr()
             S = bgr[:,:,0] + bgr[:,:,1] + bgr[:,:,2]
@@ -32,15 +32,14 @@ class Image:
                 bgr[:,:,i] *= 255/S
                 self.bgr[:,:,i] = bgr[:,:,i].astype(np.uint8)
 
-            # utilities.show(self.bgr)
-            # self.bgr = utilities.as_float32(self.bgr)
-            # target_averages = [0.636815, 0.543933, 0.469305]
-            # for i in range(3):
-            #     self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
-            # self.bgr[np.where(self.bgr > 1.0)] = 1.0
-            # self.bgr[np.where(self.bgr < 0.0)] = 0.0
-            # self.bgr = utilities.as_uint8(self.bgr)
-            # utilities.show(self.bgr)
+        elif histogram_equalization == "target_average":
+            self.bgr = utilities.as_float32(self.bgr)
+            target_averages = [0.636815, 0.543933, 0.469305]
+            for i in range(3):
+                self.bgr[:,:,i] += target_averages[i] - np.average(self.bgr[:,:,i])
+            self.bgr[np.where(self.bgr > 1.0)] = 1.0
+            self.bgr[np.where(self.bgr < 0.0)] = 0.0
+            self.bgr = utilities.as_uint8(self.bgr)
 
         self.hsv = None
         self.lab = None
@@ -104,12 +103,9 @@ class Image:
 
 
 if __name__ == "__main__":
-    img = Image("microsoft_cam/24h/south/2016-04-12_19:21:04.png")
-    img = Image("2016-04-12_19:21:04.png")
-
     import os
     filenames = []
-    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/raspberry/south/")):
         filenames = cur[2]
         break
 
@@ -117,8 +113,9 @@ if __name__ == "__main__":
 
     for file in filenames:
         try:
-            img = Image(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/", file))
+            image = Image(file)
         except FileNotFoundError:
             continue
 
-        utilities.show_all(img)
+        # utilities.show_all(img)
+        utilities.show(image.get_bgr(), time_ms=30, text=image.filename)

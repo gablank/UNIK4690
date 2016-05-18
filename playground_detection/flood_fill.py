@@ -276,7 +276,7 @@ if __name__ == "__main__":
     # try:
     import os
     filenames = []
-    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+    for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/raspberry/south/")):
         filenames = cur[2]
         break
 
@@ -290,7 +290,7 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, color_normalization=False)
+                image = Image(file, histogram_equalization=None)
             except FileNotFoundError:
                 continue
             except ValueError:

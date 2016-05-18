@@ -56,7 +56,7 @@ def ball_histogram_fun():
 
     timer = utilities.Timer()
     for i, file_path in enumerate(filenames):
-        img = Image(file_path, color_normalization=False)
+        img = Image(file_path, histogram_equalization=None)
 
         pix = img.bgr
 

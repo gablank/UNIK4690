@@ -51,7 +51,7 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, color_normalization=False)
+                image = Image(file, histogram_equalization=None)
                 try:
                     camera_playground_polygon = detector.detect(image)
                 except RuntimeError:
