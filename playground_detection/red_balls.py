@@ -10,7 +10,7 @@ logging.basicConfig() # omg..
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-from utilities import distance
+from utilities import distance, power_threshold
 
 def keypoint_filter_overlapping(kps):
     """
@@ -63,20 +63,8 @@ def red_ball_transform(image, exponent=1):
     # purpose!
     Cr = img[:,:,1]
 
-    return red_ball_power_threshold(Cr, exponent)
+    return power_threshold(Cr, exponent)
 
-def red_ball_power_threshold(Cr, exponent):
-    # Exponentiating the Cr channel (as a float image [0,1]) creates sort of a soft threshold.
-    # (Suppressing darker values)
-    Cr = np.power(Cr, exponent)
-
-    amax = np.amax(Cr)
-    light = Cr / amax
-    light *= 255
-    light = np.clip(light, 0, 255)
-    light = light.astype(np.uint8)
-
-    return light
 
 def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blobColor = 255):
     lightBlobParams = cv2.SimpleBlobDetector_Params()
@@ -163,11 +151,11 @@ class RedBallPlaygroundDetector:
             # temp = threshold_rel(Cr, 208/255)
             temp = normalize_image(temp)
             show(temp, scale=True)
-            temp = red_ball_power_threshold(temp/255.0, 5)
+            temp = power_threshold(temp/255.0, 5)
             show(temp, scale=True)
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
-            print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+            # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
             show(temp, keypoints=kps, scale=True)
             return kps
 

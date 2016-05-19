@@ -727,6 +727,19 @@ def pretty_print_keypoint(kp):
     return "<(%.0f, %.0f), %d, %.1f, %d>" % (kp.pt[0], kp.pt[1], kp.size, kp.response, kp.octave)
 
 
+def power_threshold(float_img, exponent):
+    # Exponentiating the float_img channel (as a float image [0,1]) creates sort of a soft threshold.
+    # (Suppressing darker values)
+    float_img = np.power(float_img, exponent)
+
+    amax = np.amax(float_img)
+    light = float_img / amax
+    light *= 255
+    light = np.clip(light, 0, 255)
+    light = light.astype(np.uint8)
+
+    return light
+
 
 if __name__ == "__main__":
     img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png", "24h/south/2016-04-13_09:03:03.png", "24h/south/2016-04-13_12:45:04.png"]
