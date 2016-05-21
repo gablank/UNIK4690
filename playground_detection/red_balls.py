@@ -12,6 +12,10 @@ logger.setLevel(logging.DEBUG)
 
 from utilities import distance, power_threshold, make_debug_toggable, keypoint_filter_overlapping
 
+
+show = make_debug_toggable(utilities.show, "red")
+
+
 def red_ball_transform(image, exponent=1):
     if type(image) == Image:
         img = image.get_ycrcb(np.float32)
@@ -37,6 +41,7 @@ def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blo
     lightBlobParams.blobColor = blobColor
     lightBlobParams.filterByColor = False
     lightBlobParams.filterByConvexity = False
+    lightBlobParams.filterByCircularity = True
     lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
 
     kpLight = lightBlobDetector.detect(img)
@@ -90,29 +95,58 @@ class RedBallPlaygroundDetector:
                 # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
             }
             img = red_ball_transform(image, **params["trans"])
+            show(img, scale=True)
             kps = blob_detector(img, **params["blob"])
-
+            show(img, keypoints=kps, scale=True)
             return kps
 
-        show = make_debug_toggable(utilities.show, "red")
-
-        def surf():
+        def morph():
+            from pipeline_visualizer import morph_open
             # Works well for rasberry west:
             # image.py no color normalization
             Cr = image.get_ycrcb(np.uint8)[:,:,1]
+            # Cr = image.get_bgr(np.uint8)[:,:,2]
             temp = Cr
-            # temp = threshold_rel(Cr, 208/255)
+            show(temp, scale=True)
             temp = normalize_image(temp)
             show(temp, scale=True)
-            temp = power_threshold(temp/255.0, 5)
+            temp = threshold_rel(Cr, 230/255) #, cv2.THRESH_TOZERO_INV)
             show(temp, scale=True)
+            temp = morph_open(temp, 3, 4)
+            # temp = cv2.blur(temp, (5,5))
+            show(temp, scale=True)
+            # temp = power_threshold(temp/255.0, 5)
+            # show(temp, scale=True)
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
             # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
             show(temp, keypoints=kps, scale=True)
             return kps
 
+        def surf():
+            # Works well for rasberry west:
+            # image.py no color normalization
+            Cr = image.get_ycrcb(np.uint8)[:,:,1]
+            # Cr = image.get_bgr(np.uint8)[:,:,2]
+            temp = Cr
+            # show(temp, scale=True)
+            # temp = normalize_image(temp)
+            # show(temp, scale=True)
+            # temp = threshold_rel(Cr, 188/255) #, cv2.THRESH_TOZERO_INV)
+            # show(temp, scale=True)
+            # temp = cv2.blur(temp, (5,5))
+            show(temp, scale=True)
+            temp = power_threshold(temp/255.0, 5)
+            # show(temp, scale=True)
+            kps = surf_detector(temp, hess_thresh=4000)
+            # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
+            # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+            show(temp, keypoints=kps, scale=True)
+            return kps
+
+        # kps = morph()
         kps = surf()
+        # kps = blob()
 
         points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 

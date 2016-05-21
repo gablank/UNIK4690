@@ -774,7 +774,7 @@ def keypoint_filter_overlapping(kps):
     This seems to work for some common cases at least.
     """
     if len(kps) > 150:
-        print("Not dimensioned for huge number of key points O(N^2)")
+        print("Not dimensioned for huge number of key points O(N^2)", file=sys.stderr)
         return kps
 
     def overlapping(it, kps):

@@ -36,22 +36,40 @@ def make_red_ball_imgs(filenames, action=show, prefix=""):
         metadata = utilities.read_metadata(filename)
         rs = metadata["red_ball_circles"]
 
+        def extract(img, c):
+            return extract_bb(img, circle_bb(c, 5))
+
         image = Image(filename, histogram_equalization=None)
+        ball = Image(image_data=extract(image.bgr,
+                                        rs[0]),
+                     histogram_equalization=None)
 
-        ycrcb = image.get_ycrcb(np.uint8)
-        bgr = image.get_bgr(np.uint8)
+        ycrcb = ball.get_ycrcb(np.uint8)
+        bgr = ball.get_bgr(np.uint8)
+        hsv = ball.get_hsv(np.uint8)
 
-        def extract(img):
-            return extract_bb(img, circle_bb(rs[0], 5))
 
         action(prefix+os.path.basename(filename),
-               compose(list(map(extract, [bgr, ycrcb[:,:,1]]))))
+               compose([bgr, bgr[:,:,2], ycrcb[:,:,1], hsv[:,:,0]][:3]))
+
+def extract_multiple(imgs, basename):
+    """
+    Extract the same region from multiple images
+    """
+    poly = utilities.select_polygon(imgs[0])
+    rect = cv2.boundingRect(np.array(poly))
+    for i, img in enumerate(imgs):
+        cv2.imwrite(basename+str(i)+".png", utilities.extract_bb(img, rect))
 
 if __name__ == '__main__':
-    
+
     filenames = []
 
     if len(sys.argv) > 1:
         filenames = sys.argv[1:]
 
-    make_red_ball_imgs(filenames, write, prefix="report_imgs/")
+    extract_multiple([cv2.imread(filename) for filename in filenames[1:]], filenames[0])
+    exit(0)
+
+    make_red_ball_imgs(filenames, write, prefix="report_imgs/all-")
+    # make_red_ball_imgs(filenames, write, prefix="report_imgs/Cr-bgr-")
