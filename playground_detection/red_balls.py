@@ -10,45 +10,7 @@ logging.basicConfig() # omg..
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-from utilities import distance, power_threshold
-
-def keypoint_filter_overlapping(kps):
-    """
-    The surf detector often finds multiple key points close to each other.
-    Here we simply looks naively for overlapping points reducing each "cluster"
-    to just one point. (Selecting the largest one)
-    This seems to work for some common cases at least.
-    """
-    if len(kps) > 150:
-        print("Not dimensioned for huge number of key points O(N^2)")
-        return kps
-
-    def overlapping(it, kps):
-        # NB: includes itself in result
-        overlaps = []
-        complement = []
-        for kp in kps:
-            dist = distance(it.pt, kp.pt)
-            # Assuming 'size' is the radius (?)
-            if dist < kp.size+it.size:
-                overlaps.append(kp)
-            else:
-                complement.append(kp)
-
-        return overlaps, complement
-
-    filtered = []
-
-    kps = sorted(kps, key=lambda kp: kp.size)
-    # We don't find transitive overlaps, but we do check the largest key points first
-    while len(kps) > 0:
-        kp = kps[-1]
-        cluster, kps = overlapping(kp, kps)
-        # Note the key points also have a 'response' field.
-        filtered.append(max(cluster, key=lambda kp: kp.size))
-
-    return filtered
-
+from utilities import distance, power_threshold, make_debug_toggable, keypoint_filter_overlapping
 
 def red_ball_transform(image, exponent=1):
     if type(image) == Image:
@@ -106,15 +68,6 @@ def surf_detector(img, hess_thresh=3000):
 
     return kps
 
-def make_debug_toggable(fn):
-    import os
-    def wrapped(*args, **kwargs):
-        if os.environ.get("DEBUG", "0") == "0":
-            return
-        fn(*args, **kwargs)
-
-    return wrapped
-
 
 class RedBallPlaygroundDetector:
     """
@@ -141,7 +94,7 @@ class RedBallPlaygroundDetector:
 
             return kps
 
-        show = make_debug_toggable(utilities.show)
+        show = make_debug_toggable(utilities.show, "red")
 
         def surf():
             # Works well for rasberry west:

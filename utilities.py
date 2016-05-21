@@ -697,11 +697,12 @@ def ball_detection_score(known, detected):
 
 
 
-def circle_bb(circle):
+def circle_bb(circle, margin=0):
     """
     Bounding box of a circle represeted by ((cx,cy), r)
     """
     (cx,cy), r = circle
+    r = r+margin
     x, y = cx-r, cy-r
 
     # How to interpret radius and center in a pixel world?
@@ -739,6 +740,56 @@ def power_threshold(float_img, exponent):
     light = light.astype(np.uint8)
 
     return light
+
+
+def make_debug_toggable(fn, key=""):
+    import os
+    def wrapped(*args, **kwargs):
+        value = os.environ.get("DEBUG")
+        if value is None:
+            return
+        if key in value:
+            return fn(*args, **kwargs)
+
+    return wrapped
+
+
+def keypoint_filter_overlapping(kps):
+    """
+    The surf detector often finds multiple key points close to each other.
+    Here we simply looks naively for overlapping points reducing each "cluster"
+    to just one point. (Selecting the largest one)
+    This seems to work for some common cases at least.
+    """
+    if len(kps) > 150:
+        print("Not dimensioned for huge number of key points O(N^2)")
+        return kps
+
+    def overlapping(it, kps):
+        # NB: includes itself in result
+        overlaps = []
+        complement = []
+        for kp in kps:
+            dist = distance(it.pt, kp.pt)
+            # Assuming 'size' is the radius (?)
+            if dist < kp.size+it.size:
+                overlaps.append(kp)
+            else:
+                complement.append(kp)
+
+        return overlaps, complement
+
+    filtered = []
+
+    kps = sorted(kps, key=lambda kp: kp.size)
+    # We don't find transitive overlaps, but we do check the largest key points first
+    while len(kps) > 0:
+        kp = kps[-1]
+        cluster, kps = overlapping(kp, kps)
+        # Note the key points also have a 'response' field.
+        filtered.append(max(cluster, key=lambda kp: kp.size))
+
+    return filtered
 
 
 if __name__ == "__main__":
