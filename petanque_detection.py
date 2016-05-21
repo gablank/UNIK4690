@@ -220,7 +220,6 @@ class PetanqueDetection:
         return userdata["polygon"]
 
     def _user_adjust_balls(self, image, balls, w_H_p):
-        p_H_w = np.linalg.inv(w_H_p)
         userdata = {}
         userdata["pressed_idx"] = None
         userdata["mouseover_idx"] = None
@@ -255,34 +254,13 @@ class PetanqueDetection:
                 pressed = balls[pressed_idx] if pressed_idx is not None else None
                 mouseover = balls[mouseover_idx] if mouseover_idx is not None else None
 
-                def get_playground_image_radius(playground_position, real_world_radius):
-                    world_pos = np.dot(w_H_p, np.array([playground_position[0], playground_position[1], 1]).reshape((3,1)))
-                    world_pos /= world_pos[2][0]
-                    d_pos = np.dot(w_H_p, np.array([playground_position[0]+10000, playground_position[1], 1]).reshape((3,1)))
-                    d_pos /= d_pos[2][0]
-                    delta_world = d_pos - world_pos
-                    x, y = delta_world[0][0], delta_world[1][0]
-                    # TODO: Check for x == 0
-                    a = y / x
-
-                    new_x = math.sqrt(real_world_radius**2/(a**2 + 1))
-                    new_y = a*new_x
-                    new_x += world_pos[0][0]
-                    new_y += world_pos[1][0]
-                    new_world_pos = np.array([new_x, new_y, 1]).reshape((3,1))
-                    new_screen_pos = np.dot(p_H_w, new_world_pos)
-                    new_screen_pos /= new_screen_pos[2][0]
-
-                    cur_world_pos_numpy = np.array([playground_position[0], playground_position[1], 1]).reshape((3,1))
-                    diff = new_screen_pos - cur_world_pos_numpy
-                    return int(round(math.sqrt(diff[0][0]**2 + diff[1][0]**2)))
 
                 for idx, ball in enumerate(balls):
                     ball_position = ball[0]
                     ball_team = ball[1]
                     color = ball_colors[ball_team]
                     ball_real_world_radius = self.pig_radius if ball_team == 0 else self.ball_radius
-                    radius = get_playground_image_radius(ball_position, ball_real_world_radius)
+                    radius = self.get_playground_image_radius(ball_position, ball_real_world_radius, w_H_p)
 
                     if ball in (mouseover, pressed):
                         radius *= 1.3
@@ -406,6 +384,29 @@ class PetanqueDetection:
         w_H_p = np.dot(w_H_i, i_H_p)
 
         return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p
+
+    def get_playground_image_radius(self, playground_position, real_world_radius, w_H_p):
+        p_H_w = np.linalg.inv(w_H_p)
+        world_pos = np.dot(w_H_p, np.array([playground_position[0], playground_position[1], 1]).reshape((3,1)))
+        world_pos /= world_pos[2][0]
+        d_pos = np.dot(w_H_p, np.array([playground_position[0]+10000, playground_position[1], 1]).reshape((3,1)))
+        d_pos /= d_pos[2][0]
+        delta_world = d_pos - world_pos
+        x, y = delta_world[0][0], delta_world[1][0]
+        # TODO: Check for x == 0
+        a = y / x
+
+        new_x = math.sqrt(real_world_radius**2/(a**2 + 1))
+        new_y = a*new_x
+        new_x += world_pos[0][0]
+        new_y += world_pos[1][0]
+        new_world_pos = np.array([new_x, new_y, 1]).reshape((3,1))
+        new_screen_pos = np.dot(p_H_w, new_world_pos)
+        new_screen_pos /= new_screen_pos[2][0]
+
+        cur_world_pos_numpy = np.array([playground_position[0], playground_position[1], 1]).reshape((3,1))
+        diff = new_screen_pos - cur_world_pos_numpy
+        return int(round(math.sqrt(diff[0][0]**2 + diff[1][0]**2)))
 
     def _draw_distance_to_pig(self, image, balls,
                               w_H_i,
