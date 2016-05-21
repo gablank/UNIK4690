@@ -6,6 +6,9 @@ import json
 import os
 import time
 import random
+import sys
+import datetime
+
 
 
 def get_middle(img):
@@ -77,8 +80,13 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
 
     while True:
         key = cv2.waitKey(time_ms)
-        if key % 256 == ord('q'):
+        char_key = key % 256
+        if char_key == ord('q'):
             exit(0)
+
+        if char_key == ord('w'):
+            now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S.png")
+            cv2.imwrite("imshow_"+now, to_show)
 
         if time_ms > 0:
             break
