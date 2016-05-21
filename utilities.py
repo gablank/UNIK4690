@@ -724,6 +724,10 @@ def extract_circle(img, circle, margin=0, mask_color=None):
         roi[np.where(mask == 0)] = mask_color
     return roi
 
+def extract_bb(img, r):
+    x,y,w,h = r
+    return img[y:y+h, x:x+w]
+
 def pretty_print_keypoint(kp):
     return "<(%.0f, %.0f), %d, %.1f, %d>" % (kp.pt[0], kp.pt[1], kp.size, kp.response, kp.octave)
 
