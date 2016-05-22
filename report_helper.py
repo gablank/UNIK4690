@@ -5,8 +5,9 @@ import cv2
 import numpy as np
 import utilities
 from image import Image
-from utilities import show_all, extract_bb, circle_bb
+from utilities import show_all, extract_bb, circle_bb, extract_circle
 import os
+from matplotlib import pyplot as plt
 
 
 def compose(images, border=2):
@@ -26,6 +27,7 @@ def compose(images, border=2):
     return canvas
 
 def show(source_filename, img):
+    print(source_filename)
     utilities.show(img)
 
 def write(source_filename, img):
@@ -34,20 +36,46 @@ def write(source_filename, img):
 def make_red_ball_imgs(filenames, action=show, prefix=""):
     for filename in filenames:
         metadata = utilities.read_metadata(filename)
-        rs = metadata["red_ball_circles"]
-
-        def extract(img, c):
-            return extract_bb(img, circle_bb(c, 5))
+        balls = metadata["red_ball_circles"]
 
         image = Image(filename, histogram_equalization=None)
-        ball = Image(image_data=extract(image.bgr,
-                                        rs[0]),
+        ball = Image(image_data=extract_circle(image.bgr, balls[0], 5),
                      histogram_equalization=None)
 
         ycrcb = ball.get_ycrcb(np.uint8)
         bgr = ball.get_bgr(np.uint8)
         hsv = ball.get_hsv(np.uint8)
 
+        action(prefix+os.path.basename(filename),
+               compose([bgr, bgr[:,:,2], ycrcb[:,:,1], hsv[:,:,0]][:3]))
+
+def ball_generator(filenames, ball_idxs=[0]):
+    for filename in filenames:
+        metadata = utilities.read_metadata(filename)
+        balls = metadata["ball_circles"]
+        balls = sorted(balls, key=lambda x: x[0])
+
+        image = Image(filename, histogram_equalization=None)
+
+        ball_imgs = []
+
+        for i in ball_idxs:
+            ball_img = Image(image_data=extract_circle(image.bgr, balls[i], 5),
+                             histogram_equalization=None)
+            ball_imgs.append(ball_img)
+
+        yield ball_imgs, filename
+
+
+def make_ball_imgs(filenames, action=show, prefix=""):
+    for (ball,), filename in ball_generator(filenames, [0]):
+
+        ycrcb = ball.get_ycrcb(np.uint8)
+        bgr = ball.get_bgr(np.uint8)
+        hsv = ball.get_hsv(np.uint8)
+
+        action("", bgr)
+        continue
 
         action(prefix+os.path.basename(filename),
                compose([bgr, bgr[:,:,2], ycrcb[:,:,1], hsv[:,:,0]][:3]))
@@ -72,8 +100,11 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         filenames = sys.argv[1:]
 
-    extract_multiple(filenames[1:], filenames[0])
-    exit(0)
+    # extract_multiple(filenames[1:], filenames[0])
+    # exit(0)
 
-    make_red_ball_imgs(filenames, write, prefix="report_imgs/all-")
+    filenames = sorted(filenames)
+
+    make_ball_imgs(filenames, show, prefix="report_imgs/all-")
+    # make_red_ball_imgs(filenames, write, prefix="report_imgs/all-")
     # make_red_ball_imgs(filenames, write, prefix="report_imgs/Cr-bgr-")

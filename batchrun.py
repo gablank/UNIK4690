@@ -46,6 +46,9 @@ if __name__ == "__main__":
     #                                        BallDetector=HoughBallDetector)
     petanque_detection = PetanqueDetection(PlaygroundDetector=RedBallPlaygroundDetector,
                                            BallDetector=SurfBallDetector)
+
+    pg_thresh = 0.8
+
     try:
         for file in filenames:
             if not file.endswith(".png"):
@@ -62,7 +65,7 @@ if __name__ == "__main__":
                     _, pg_score, ball_score, ball_count, real_count = result
                     logger.info("Result: pgs: % .2f, bs: %5.2f, bd: % d",
                                  pg_score, ball_count, real_count-ball_count)
-                    if pg_score < 0.8:
+                    if pg_score < pg_thresh:
                         print("pg: %s" % file)
                     if ball_count != real_count:
                         print("b: %s" % file)
@@ -75,6 +78,16 @@ if __name__ == "__main__":
                 continue
             except ValueError:
                 continue
+
+        def iter_count(it):
+            return sum(1 for i in it)
+
+        stats = petanque_detection.statistics
+        n = len(stats)
+        failed_pg = iter_count(filter(lambda x: x[1] < pg_thresh, stats))
+        failed_balls = iter_count(filter(lambda x: x[3] != x[4], stats))
+        logger.info("Playground failed: %.2f", failed_pg/n)
+        logger.info("Balls failed     : %.2f%%", failed_balls/n)
 
 
     except Exception as e:
