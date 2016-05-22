@@ -675,6 +675,8 @@ def matching_balls(known, detected, match_threshold_factor=1.0):
     unmatched = list(detected)
 
     for ball in known:
+        if len(unmatched) == 0:
+            break
         center, r = ball
         match_idx, best_match = min(enumerate(unmatched), key=lambda x: distance(center, x[1]))
         d = distance(center, best_match)

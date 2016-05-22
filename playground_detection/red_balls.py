@@ -8,7 +8,7 @@ import logging
 
 logging.basicConfig() # omg..
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 from utilities import distance, power_threshold, make_debug_toggable, keypoint_filter_overlapping
 
@@ -152,7 +152,7 @@ class RedBallPlaygroundDetector:
 
         if len(points) != 4:
             logger.debug("Found fewer than/more than 4 point (%s)", len(points))
-            raise RuntimeError("Could not detect playground")
+            return points
 
 
         # Now we need to pair the detected points with the known real

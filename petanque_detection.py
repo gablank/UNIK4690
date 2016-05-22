@@ -13,6 +13,33 @@ import time
 import numpy as np
 import math
 import os
+import logging
+
+logging.basicConfig() # have to call this to get default console handler...
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
+
+def calc_playground_score(metadata, camera_playground_polygon):
+    if "playground_poly" in metadata:
+        hand_detected = np.array(metadata["playground_poly"])
+        if len(camera_playground_polygon) == 4:
+            score = utilities.playground_score(hand_detected, np.array(camera_playground_polygon))
+        else:
+            score = 0
+        logger.debug("Playground score: % .2f", score)
+        return score
+    return -1
+
+def calc_ball_score(metadata, camera_playground_polygon, balls):
+    if "ball_circles" in metadata:
+        hand_detected = metadata["ball_circles"]
+        # Adjust hand detected coordinates to playground image only coordinates
+        dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
+        hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
+        score, count = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
+        logger.debug("Ball score: % .2f %s %s", score, count, len(hand_detected) - count)
+        return score, count, len(hand_detected)
+    return -1, 0, 0
 
 
 class PetanqueDetection:
@@ -41,12 +68,18 @@ class PetanqueDetection:
         self._mouse_position = None
         self._win_name = "Petanque detector"
         self._window = cv2.namedWindow(self._win_name)
+        # Results per image:
+        # List of [<filename>, <playground_score>, <ball_score>, <#detected_balls>, <#real_balls>]
+        self.statistics = []
 
-    def detect(self, image):
+    def detect(self, image, interactive=True, playground_only=False):
         """
         This is the main function used for detection. It is a pipeline where the inputs and outputs from the
         blocks are required to be of a specific format.
         """
+        metadata = image.get_metadata()
+        result_for_image = [image.path]
+
         # Playground detection
         # Input: image: Image
         # Output: List of points of the same length as self.playground_polygon (even if it failed to detect anything!)
@@ -54,10 +87,23 @@ class PetanqueDetection:
         # the convex hull of the points.
         camera_playground_polygon = self.playground_detector.detect(image)
 
+        playground_score = calc_playground_score(metadata, camera_playground_polygon)
+        result_for_image.append(playground_score)
+
+        if len(camera_playground_polygon) != 4:
+            # Detection failed, create a dummy polygon for user to adjust
+            # TODO: fix ordering
+            camera_playground_polygon = [(100,100), (200,100), (200,200), (100,200)]
+
         # Playground detection adjustment
         # Input: Original image, polygon defining the playground as list of points
         # Output: List of points of same size, defining the playground. First point is considered the origin.
-        camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+        if interactive:
+            camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+
+        if playground_only:
+            self.statistics.append(result_for_image)
+            return
 
         # Homography estimation
         # Input: Camera playground polygon as a numpy array of points,
@@ -77,18 +123,27 @@ class PetanqueDetection:
         # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
         balls = self.ball_detector.detect(playground_image, w_H_p)
 
+        ball_score, detected_count, actual_count = calc_ball_score(metadata, camera_playground_polygon, balls)
+        result_for_image.extend([ball_score, detected_count, actual_count])
+
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
         # Output: List of points where the balls are, not necessarily the same size as the corresponding input
         # Uses positions in the playground_image!
-        balls = self._user_adjust_balls(playground_image, balls, w_H_p)
+        if interactive:
+            balls = self._user_adjust_balls(playground_image, balls, w_H_p)
 
-        # Show result
-        # Input: Original image, list of points where the balls are in playground_image coordinates
-        # Output: Balls and their ranks drawn onto and BGR image
-        result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
+        self.statistics.append(result_for_image)
 
-        utilities.show(result, self._win_name)
+        if interactive:
+            # Show result
+            # Input: Original image, list of points where the balls are in playground_image coordinates
+            # Output: Balls and their ranks drawn onto and BGR image
+            result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
+
+            utilities.show(result, self._win_name)
+
+        return result_for_image
 
     def _user_adjust_playground(self, image, playground_polygon):
         userdata = {}
@@ -492,9 +547,9 @@ if __name__ == "__main__":
         #     break
 
         # filenames = glob("images/microsoft_cam/red_balls/*brightness=40,exposure_absolute=10,saturation=10.png")
-        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
-        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
-        filenames = glob("images/microsoft_cam/24h/south/*png")
+        filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
+        # filenames = glob("images/dual-lifecam,raspberry/lifecam/*.png")
+        # filenames = glob("images/microsoft_cam/24h/south/*png")
 
         filenames.sort()
 

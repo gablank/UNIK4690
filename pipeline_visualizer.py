@@ -606,6 +606,7 @@ marker_balls_pipeline3 = set_pipeline_parameters(
         pick_channel_op(),
         # Operation("trans", red_ball_transform, {"exponent": (5, (1.0, 10.0))}),
         Operation("normalize", normalize_image),
+        blur_op(),
         # threshold_op(cv2.THRESH_BINARY),
         Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (1000, (1000, 20000))})
     ],

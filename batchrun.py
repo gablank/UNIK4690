@@ -1,10 +1,12 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 from playground_detection.red_balls import RedBallPlaygroundDetector
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
 from playground_detection.manual_playground_detector import ManualPlaygroundDetector
 from ball_detection.hough import HoughBallDetector
+from ball_detection.surf import SurfBallDetector
+from petanque_detection import PetanqueDetection
 from image import Image
 import cv2
 import utilities
@@ -19,8 +21,6 @@ from glob import glob
 logging.basicConfig(stream=sys.stderr) # have to call this to get default console handler...
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-world_playground_polygon=((0,6000),(0,0),(2000,0),(2000,6000))
 
 if __name__ == "__main__":
 
@@ -39,8 +39,13 @@ if __name__ == "__main__":
 
         filenames.sort()
 
-    detector = RedBallPlaygroundDetector(None)
-
+    # petanque_detection = PetanqueDetection()
+    # petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
+    #                                        BallDetector=HoughBallDetector)
+    # petanque_detection = PetanqueDetection(PlaygroundDetector=RedBallPlaygroundDetector,
+    #                                        BallDetector=HoughBallDetector)
+    petanque_detection = PetanqueDetection(PlaygroundDetector=RedBallPlaygroundDetector,
+                                           BallDetector=SurfBallDetector)
     try:
         for file in filenames:
             if not file.endswith(".png"):
@@ -53,19 +58,18 @@ if __name__ == "__main__":
                 #     continue
                 image = Image(file, histogram_equalization=None)
                 try:
-                    camera_playground_polygon = detector.detect(image)
-                except RuntimeError:
-                    # print("Broken image: %s" % file)
-                    print(file)
-                    continue
-
-                if "playground_poly" in image.get_metadata():
-                    hand_detected = np.array(image.get_metadata()["playground_poly"])
-                    score = utilities.playground_score(hand_detected, np.array(camera_playground_polygon))
-                    logger.debug("Playground score: %s", score)
-                    if score < 0.90:
-                        # print("Bad image: %s" % file)
-                        print(file)
+                    result = petanque_detection.detect(image, interactive=False)
+                    _, pg_score, ball_score, ball_count, real_count = result
+                    logger.info("Result: pgs: % .2f, bs: %5.2f, bd: % d",
+                                 pg_score, ball_count, real_count-ball_count)
+                    if pg_score < 0.8:
+                        print("pg: %s" % file)
+                    if ball_count != real_count:
+                        print("b: %s" % file)
+                except Exception as e:
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    logger.error("Error: %s", e)
 
             except FileNotFoundError:
                 continue
@@ -78,5 +82,5 @@ if __name__ == "__main__":
         print(e)
         traceback.print_tb(e.__traceback__)
     finally:
-        if hasattr(detector, "transformer"):
-            detector.transformer.save(filename="playground_transformer_state.json")
+        if hasattr(petanque_detection.playground_detector, "transformer"):
+            petanque_detection.playground_detector.transformer.save(filename="playground_transformer_state.json")

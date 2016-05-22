@@ -133,6 +133,8 @@ def interactive_set_metadata(img_path, key, use_dir_metadata=True):
 
 
 if __name__ == '__main__':
+    # ball_histogram_fun()
+    # exit(0)
 
     if len(sys.argv) > 1:
         path = sys.argv[1]
