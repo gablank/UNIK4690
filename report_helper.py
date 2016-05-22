@@ -52,14 +52,18 @@ def make_red_ball_imgs(filenames, action=show, prefix=""):
         action(prefix+os.path.basename(filename),
                compose([bgr, bgr[:,:,2], ycrcb[:,:,1], hsv[:,:,0]][:3]))
 
-def extract_multiple(imgs, basename):
+
+def extract_multiple(filenames, basename):
     """
     Extract the same region from multiple images
     """
-    poly = utilities.select_polygon(imgs[0])
+    img1 = cv2.imread(filenames[0])
+    poly = utilities.select_polygon(img1)
     rect = cv2.boundingRect(np.array(poly))
-    for i, img in enumerate(imgs):
-        cv2.imwrite(basename+str(i)+".png", utilities.extract_bb(img, rect))
+    for i, filename in enumerate(filenames):
+        img = cv2.imread(filename)
+        cv2.imwrite(basename+str(i)+"-"+os.path.basename(filename),
+                    utilities.extract_bb(img, rect))
 
 if __name__ == '__main__':
 
@@ -68,7 +72,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         filenames = sys.argv[1:]
 
-    extract_multiple([cv2.imread(filename) for filename in filenames[1:]], filenames[0])
+    extract_multiple(filenames[1:], filenames[0])
     exit(0)
 
     make_red_ball_imgs(filenames, write, prefix="report_imgs/all-")
