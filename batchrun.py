@@ -17,6 +17,7 @@ import os
 import sys
 import logging
 from glob import glob
+import json
 
 logging.basicConfig(stream=sys.stderr) # have to call this to get default console handler...
 logger = logging.getLogger(__name__)
@@ -86,8 +87,13 @@ if __name__ == "__main__":
         n = len(stats)
         failed_pg = iter_count(filter(lambda x: x[1] < pg_thresh, stats))
         failed_balls = iter_count(filter(lambda x: x[3] != x[4], stats))
+        ball_delta_abs_sum = sum(map(lambda x: abs(x[4]-x[3]), stats))
         logger.info("Playground failed: %.2f", failed_pg/n)
-        logger.info("Balls failed     : %.2f%%", failed_balls/n)
+        logger.info("Balls failed     : %.2f", failed_balls/n)
+        logger.info("Ball delta error sum : %d", ball_delta_abs_sum)
+
+        with open("stats.json", "w") as fp:
+            json.dump(stats, fp) # overwrites on error too... 
 
 
     except Exception as e:
