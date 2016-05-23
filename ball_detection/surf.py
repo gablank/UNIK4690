@@ -61,10 +61,10 @@ class SurfBallDetector:
                 as_list.append((vertex[0], vertex[1]))
             return np.array(as_list)
 
-        def compactness(ctr):
+        def circularity(ctr):
             perim = cv2.arcLength(ctr, closed=True)
             area = cv2.contourArea(ctr)
-            return perim*perim/(area*4*math.pi)
+            return (area*4*math.pi) / (perim*perim)
 
         def eccentricity(ctr):
             ellipse = cv2.fitEllipse(ctr)
@@ -89,9 +89,9 @@ class SurfBallDetector:
             ctrs = [cv_unwrap(ctr) for ctr in ctrs]
 
             # print(list(map(lambda ctr: eccentricity(ctr), ctrs)))
-            # print(list(map(lambda ctr: compactness(ctr), ctrs)))
+            # print(list(map(lambda ctr: circularity(ctr), ctrs)))
 
-            ctrs = list(filter(lambda ctr: abs(1-compactness(ctr)) < 0.3, ctrs))
+            ctrs = list(filter(lambda ctr: abs(1-circularity(ctr)) < 0.3, ctrs))
 
             circles = [cv2.minEnclosingCircle(ctr) for ctr in ctrs]
 
