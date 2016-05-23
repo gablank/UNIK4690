@@ -1,8 +1,14 @@
 import cv2
 import numpy as np
 import utilities
+import logging
 
 from utilities import power_threshold, transform_image, as_uint8, make_debug_toggable
+
+
+logging.basicConfig() # omg..
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 ball_transformation_params = {'ycrcb_cr': -0.75038994347347221, 'lab_b': 0.3036750425892179, 'bgr_b': -1.1892291465326323, 'lab_a': -0.7428254604861555, 'ycrcb_cn': -0.57301987482036387, 'lab_l': -0.68882136586824594, 'hsv_h': -0.095966576209467969, 'hsv_s': 0.45161636314988052, 'ycrcb_y': -0.21598565380357415, 'hsv_v': -1.3081319744285105, 'bgr_r': -1.2568352180214275, 'bgr_g': 0.49475196208293376}
@@ -90,8 +96,10 @@ class SurfBallDetector:
                 kp_radius = kp.size / 2
                 pg_radius = calc_playing_ball_radius(kp.pt)
                 radius_err = abs(pg_radius - kp_radius)
-                if radius_err / pg_radius < 0.5:
+                if radius_err / pg_radius < 0.60:
                     res.append(kp)
+                else:
+                    logger.debug("kp (%.0f, %.0f) rejected error (rat) %.3f", kp.pt[0], kp.pt[1], radius_err / pg_radius)
 
             return res
 
@@ -128,6 +136,8 @@ class SurfBallDetector:
         img = as_uint8(img)
 
         pig = detect_pig()
+        if pig is None:
+            logger.debug("Failed to detect pig")
 
         # img = cv2.cvtColor(playground_image.bgr, cv2.COLOR_BGR2GRAY)
         # img = as_uint8(img)
