@@ -30,6 +30,12 @@ def calc_playground_score(metadata, camera_playground_polygon):
         return score
     return -1
 
+def adjust_points_to_playground_image(pts, camera_playground_polygon):
+    dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
+    adjusted = [(x-dx, y-dy) for (x,y) in pts]
+    return adjusted
+
+
 def calc_ball_score(metadata, camera_playground_polygon, balls):
     if "ball_circles" in metadata:
         hand_detected = metadata["ball_circles"]
@@ -117,11 +123,12 @@ class PetanqueDetection:
         # the playground set to BGR (0,0,0)
         playground_image, w_H_p, playground_mask = self._get_playground_image(image, camera_playground_polygon, w_H_i)
 
+        playground_polygon = adjust_points_to_playground_image(camera_playground_polygon, camera_playground_polygon)
         # Ball detection
         # Input: Image of the playground, homography from that image to the real world positions
         # Output: List of tuples of two items. First item is the position (tuple:(x,y)), second item is the team number
         # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
-        balls = self.ball_detector.detect(playground_image, w_H_p, playground_mask)
+        balls = self.ball_detector.detect(playground_image, w_H_p, playground_polygon, playground_mask)
 
         ball_score, actual_count, matches = calc_ball_score(metadata, camera_playground_polygon, balls)
         result_for_image.extend([ball_score, len(balls), actual_count])
@@ -547,11 +554,14 @@ if __name__ == "__main__":
         #     break
 
         # filenames = glob("images/microsoft_cam/red_balls/*brightness=40,exposure_absolute=10,saturation=10.png")
-        filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
+        filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")[:-1:10]
         # filenames = glob("images/dual-lifecam,raspberry/lifecam/*.png")
         # filenames = glob("images/microsoft_cam/24h/south/*png")
 
         filenames.sort()
+
+        # Selectively turn on debugging (see make_debug_toggable)
+        os.environ["DEBUG"] = "surf"
 
     try:
         for file in filenames:

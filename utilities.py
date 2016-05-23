@@ -810,8 +810,8 @@ def keypoint_filter_overlapping(kps):
         complement = []
         for kp in kps:
             dist = distance(it.pt, kp.pt)
-            # Assuming 'size' is the radius (?)
-            if dist < kp.size+it.size:
+            # Seems kp.size is the diameter (ish at least.. it's a bit unclear..)
+            if dist < kp.size/2+it.size:
                 overlaps.append(kp)
             else:
                 complement.append(kp)
