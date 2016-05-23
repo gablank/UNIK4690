@@ -8,6 +8,7 @@ import time
 import random
 import sys
 import datetime
+from image import Image
 
 
 
@@ -35,11 +36,15 @@ def draw_label(to_show, text):
     cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
 
-
-def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False):
+global_shown_history = []
+global_show_i = 0
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False, keep=True):
     """
     Show img in a window
     """
+
+    global global_show_i
+
     if fullscreen:
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -77,6 +82,10 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
                 y_pos += hist.shape[1] + y_padding
 
     cv2.imshow(win_name, to_show)
+    if keep:
+        global_shown_history.append(to_show)
+        global_show_i = len(global_shown_history)-1
+
 
     while True:
         key = cv2.waitKey(time_ms)
@@ -87,6 +96,21 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
         if char_key == ord('w'):
             now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S.png")
             cv2.imwrite("imshow_"+now, to_show)
+        elif char_key == ord('a'):
+            return show_all(Image(image_data=img))
+        elif char_key == ord('n'):
+            if global_show_i < len(global_shown_history)-1:
+                global_show_i += 1
+                return show(global_shown_history[global_show_i], keep=False)
+            else:
+                continue
+
+        elif char_key == ord('p'):
+            if global_show_i > 0:
+                global_show_i -= 1
+                return show(global_shown_history[global_show_i], keep=False)
+            else:
+                continue
 
         if time_ms > 0:
             break
