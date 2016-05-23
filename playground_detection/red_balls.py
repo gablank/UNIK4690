@@ -179,7 +179,7 @@ class RedBallPlaygroundDetector:
 
         def cv_convex_hull_to_list(convex_hull):
             """
-            cv2.convectHull wraps the points in extra lists for some reason.
+            cv2.convexHull wraps the points in extra lists for some reason.
             Unwrap and return as a python lists (of tuples) instead of a numpy array
             """
             convex_hull_as_list = []

@@ -561,7 +561,9 @@ if __name__ == "__main__":
         filenames.sort()
 
         # Selectively turn on debugging (see make_debug_toggable)
-        os.environ["DEBUG"] = "surf"
+        # os.environ["DEBUG"] = "surf"
+        # os.environ["DEBUG"] = "surf,pig"
+        # os.environ["DEBUG"] = "pig"
 
     try:
         for file in filenames:

@@ -465,12 +465,14 @@ phase_pipeline = [
     # threshold_op(cv2.THRESH_BINARY_INV),
 ]
 
-def run_pipeline(img, pipeline):
+def run_pipeline(img, pipeline, debug=False):
     for i, op in enumerate(pipeline):
         if op.params:
             img = op.op(img, **op.params)
         else:
             img = op.op(img)
+        if debug:
+            utilities.show(img, text=op.name)
 
     return img
 

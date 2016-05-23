@@ -1,7 +1,9 @@
+import math
 import cv2
 import numpy as np
 import utilities
 import logging
+import os
 
 from utilities import power_threshold, transform_image, as_uint8, make_debug_toggable
 
@@ -13,12 +15,18 @@ logger.setLevel(logging.DEBUG)
 
 ball_transformation_params = {'ycrcb_cr': -0.75038994347347221, 'lab_b': 0.3036750425892179, 'bgr_b': -1.1892291465326323, 'lab_a': -0.7428254604861555, 'ycrcb_cn': -0.57301987482036387, 'lab_l': -0.68882136586824594, 'hsv_h': -0.095966576209467969, 'hsv_s': 0.45161636314988052, 'ycrcb_y': -0.21598565380357415, 'hsv_v': -1.3081319744285105, 'bgr_r': -1.2568352180214275, 'bgr_g': 0.49475196208293376}
 
+def to_int(nested_tuple):
+    if type(nested_tuple) in (list, tuple):
+        return tuple(to_int(x) for x in nested_tuple)
+    else:
+        return int(nested_tuple)
 
 class SurfBallDetector:
     def __init__(self, petanque_detection):
         self.petanque_detection = petanque_detection
 
     def detect(self, playground_image, w_H_p, playground_polygon, playground_mask):
+        debug_spec = os.environ.get("DEBUG", "")
         show = make_debug_toggable(utilities.show, "surf")
         petanque_detection = self.petanque_detection
 
@@ -43,35 +51,56 @@ class SurfBallDetector:
             return optimized_kps
 
 
-        def cv_convex_hull_to_list(convex_hull):
+        def cv_unwrap(wrapped_points):
             """
-            cv2.convexHull wraps the points in extra lists for some reason.
-            Unwrap and return as a python lists (of tuples) instead of a numpy array
+            cv2.convexHull and cv2.findContours wraps the points in extra lists for some reason.
             """
-            convex_hull_as_list = []
-            for idx in range(len(convex_hull)):
-                vertex = convex_hull[idx][0]
-                convex_hull_as_list.append((vertex[0], vertex[1]))
-            return convex_hull_as_list
+            as_list = []
+            for idx in range(len(wrapped_points)):
+                vertex = wrapped_points[idx][0]
+                as_list.append((vertex[0], vertex[1]))
+            return np.array(as_list)
+
+        def compactness(ctr):
+            perim = cv2.arcLength(ctr, closed=True)
+            area = cv2.contourArea(ctr)
+            return perim*perim/(area*4*math.pi)
+
+        def eccentricity(ctr):
+            ellipse = cv2.fitEllipse(ctr)
+            (x,y),(w,h),alpha = ellipse
+            return max(h,w)/min(h,w)
 
         def detect_pig():
             """
             Quick and dirty pig detection
             """
+            debug_pig = "pig" in debug_spec
             from pipeline_visualizer import pig_pipeline, run_pipeline
             img = as_uint8(playground_image.bgr)
             # show(img)
-            img = run_pipeline(img, pig_pipeline)
+            img = run_pipeline(img, pig_pipeline, debug=debug_pig)
             # show(img)
             _1, ctrs, _2 = cv2.findContours(img, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_NONE)
 
-            ctrs = [cv_convex_hull_to_list(ctr) for ctr in ctrs]
+            foo = playground_image.bgr.copy()
+            cv2.drawContours(foo, ctrs, -1, (0,0,255))
 
-            # foo = playground_image.bgr.copy()
-            # cv2.drawContours(foo, ctrs, -1, (0,0,255))
-            # show(foo)
+            ctrs = [cv_unwrap(ctr) for ctr in ctrs]
 
-            circles = [cv2.minEnclosingCircle(np.array(ctr)) for ctr in ctrs]
+            # print(list(map(lambda ctr: eccentricity(ctr), ctrs)))
+            # print(list(map(lambda ctr: compactness(ctr), ctrs)))
+
+            ctrs = list(filter(lambda ctr: abs(1-compactness(ctr)) < 0.3, ctrs))
+
+            circles = [cv2.minEnclosingCircle(ctr) for ctr in ctrs]
+
+            if debug_pig:
+                for c in circles:
+                    pt,r = to_int(c)
+                    cv2.circle(foo, pt, r, (0,255,0))
+                    cv2.circle(foo, pt, calc_pig_radius(pt), (255,0,0))
+                show(foo)
 
             if len(circles) == 0:
                 return None
