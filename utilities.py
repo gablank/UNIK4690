@@ -696,14 +696,15 @@ def ball_detection_score(known, detected):
     # - precision (same as accuracy in this case)
     # - recall
     # - F-score
-    match_count = len(matching_balls(known, detected))
+    matches = matching_balls(known, detected)
+    match_count = len(matches)
 
     recall = match_count / len(known) 
     precision = match_count / len(detected) 
     if recall + precision < 0.000000001:
         return 0, len(detected)
     # F-score, beta = 1:
-    return 2*recall*precision / (recall + precision), len(detected)
+    return 2*recall*precision / (recall + precision), matches
 
 
 

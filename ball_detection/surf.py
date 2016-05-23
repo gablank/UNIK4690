@@ -7,16 +7,12 @@ from utilities import power_threshold, transform_image, as_uint8, make_debug_tog
 
 ball_transformation_params = {'ycrcb_cr': -0.75038994347347221, 'lab_b': 0.3036750425892179, 'bgr_b': -1.1892291465326323, 'lab_a': -0.7428254604861555, 'ycrcb_cn': -0.57301987482036387, 'lab_l': -0.68882136586824594, 'hsv_h': -0.095966576209467969, 'hsv_s': 0.45161636314988052, 'ycrcb_y': -0.21598565380357415, 'hsv_v': -1.3081319744285105, 'bgr_r': -1.2568352180214275, 'bgr_g': 0.49475196208293376}
 
-def surf_detector(img, hess_thresh=3000):
-    surf = cv2.xfeatures2d.SURF_create(hess_thresh, upright=True) #, nOctaves=10)
-    kps = surf.detect(img)
-    return kps
 
 class SurfBallDetector:
     def __init__(self, petanque_detection):
         self.petanque_detection = petanque_detection
 
-    def detect(self, playground_image, w_H_p):
+    def detect(self, playground_image, w_H_p, playground_mask):
         show = make_debug_toggable(utilities.show, "surf")
         petanque_detection = self.petanque_detection
 
@@ -41,6 +37,11 @@ class SurfBallDetector:
         img = as_uint8(img)
 
         img = cv2.blur(img, (7, 7))
+
+        def surf_detector(img, hess_thresh=3000):
+            surf = cv2.xfeatures2d.SURF_create(hess_thresh, upright=True) #, nOctaves=10)
+            kps = surf.detect(img, mask=playground_mask)
+            return kps
 
         kps = surf_detector(img)
        

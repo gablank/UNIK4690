@@ -18,6 +18,7 @@ import sys
 import logging
 from glob import glob
 import json
+import argparse
 
 logging.basicConfig(stream=sys.stderr) # have to call this to get default console handler...
 logger = logging.getLogger(__name__)
@@ -25,10 +26,15 @@ logger.setLevel(logging.DEBUG)
 
 if __name__ == "__main__":
 
-    filenames = []
+    playground_only = False
 
     if len(sys.argv) > 1:
-        filenames = sys.argv
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-p', '--playground-only', action='store_true',
+                        help='Only detect playground')
+
+        args, filenames = parser.parse_known_args()
+        playground_only = args.playground_only
     else:
         # for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
         #     filenames = cur[2]
@@ -62,7 +68,7 @@ if __name__ == "__main__":
                 #     continue
                 image = Image(file, histogram_equalization=None)
                 try:
-                    result = petanque_detection.detect(image, interactive=False)
+                    result = petanque_detection.detect(image, interactive=False, playground_only=playground_only)
                     _, pg_score, ball_score, ball_count, real_count = result
                     logger.info("Result: pgs: % .2f, bs: %5.2f, bd: % d",
                                  pg_score, ball_count, real_count-ball_count)

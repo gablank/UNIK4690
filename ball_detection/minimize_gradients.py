@@ -7,7 +7,7 @@ class MinimizeGradientsBallDetector:
     def __init__(self, petanque_detection):
         self.petanque_detection = petanque_detection
 
-    def detect(self, image, playing_field_polygon):
+    def detect(self, image, playing_field_polygon, playground_mask):
         return [((982, 86), 0), ((517, 544), 1), ((1042, 57), 1), ((1114, 100), 1), ((851, 185), 2), ((1060, 126), 2), ((780, 285), 2), ((1027, 300), 1), ((1103, 160), 1), ((711, 247), 1)]
         # works well
         # surf = cv.xfeatures2d.SURF_create(700)

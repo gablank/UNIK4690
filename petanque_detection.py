@@ -36,10 +36,10 @@ def calc_ball_score(metadata, camera_playground_polygon, balls):
         # Adjust hand detected coordinates to playground image only coordinates
         dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
         hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
-        score, count = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
-        logger.debug("Ball score: % .2f %s %s", score, count, len(hand_detected) - count)
-        return score, count, len(hand_detected)
-    return -1, 0, 0
+        score, matches = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
+        logger.debug("Ball score: % .2f %s %s", score, len(balls), len(matches))
+        return score, len(hand_detected), matches
+    return -1, 0, []
 
 
 class PetanqueDetection:
@@ -102,8 +102,8 @@ class PetanqueDetection:
             camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
 
         if playground_only:
-            self.statistics.append(result_for_image)
-            return
+            self.statistics.append(result_for_image + [0,0,0])
+            return self.statistics[-1]
 
         # Homography estimation
         # Input: Camera playground polygon as a numpy array of points,
@@ -115,16 +115,16 @@ class PetanqueDetection:
         # Input: Original image, polygon defining the playground as list of points
         # Output: Image of the size of the bounding rectangle (not angled!) of the playground, with all pixels outside
         # the playground set to BGR (0,0,0)
-        playground_image, w_H_p = self._get_playground_image(image, camera_playground_polygon, w_H_i)
+        playground_image, w_H_p, playground_mask = self._get_playground_image(image, camera_playground_polygon, w_H_i)
 
         # Ball detection
         # Input: Image of the playground, homography from that image to the real world positions
         # Output: List of tuples of two items. First item is the position (tuple:(x,y)), second item is the team number
         # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
-        balls = self.ball_detector.detect(playground_image, w_H_p)
+        balls = self.ball_detector.detect(playground_image, w_H_p, playground_mask)
 
-        ball_score, detected_count, actual_count = calc_ball_score(metadata, camera_playground_polygon, balls)
-        result_for_image.extend([ball_score, detected_count, actual_count])
+        ball_score, actual_count, matches = calc_ball_score(metadata, camera_playground_polygon, balls)
+        result_for_image.extend([ball_score, len(balls), actual_count])
 
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
@@ -439,7 +439,7 @@ class PetanqueDetection:
         # Then multiply them together to get the homography from the playground_image to real world
         w_H_p = np.dot(w_H_i, i_H_p)
 
-        return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p
+        return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p, playground_mask
 
     def get_playground_image_radius(self, playground_position, real_world_radius, w_H_p):
         p_H_w = np.linalg.inv(w_H_p)

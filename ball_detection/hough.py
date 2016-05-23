@@ -10,7 +10,7 @@ class HoughBallDetector:
     def __init__(self, petanque_detection):
         self.petanque_detection = petanque_detection
 
-    def detect(self, playground_image, w_H_p):
+    def detect(self, playground_image, w_H_p, playground_mask):
         params = {
             "blur": {'size': 11},
             "hough": {'p1': 57, 'p2': 8, 'min_radius': 5, 'max_radius': 14},
