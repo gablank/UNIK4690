@@ -253,6 +253,9 @@ def morph_open(img, kernel_size, iterations):
     img = cv2.dilate(img, kernel, iterations=iterations)
     return img
 
+open_op = lambda: Operation("close", morph_open,
+                            {"iterations": (1, (0, 30)), "kernel_size": (3, [3,5,6,9])})
+
 def make_repeated_op(op, n):
     def repeat(img, **kwargs):
         for i in range(n):
@@ -461,6 +464,36 @@ phase_pipeline = [
     # Operation("hist", utilities.draw_histogram),
     # threshold_op(cv2.THRESH_BINARY_INV),
 ]
+
+def run_pipeline(img, pipeline):
+    for i, op in enumerate(pipeline):
+        if op.params:
+            img = op.op(img, **op.params)
+        else:
+            img = op.op(img)
+
+    return img
+
+pig_pipeline = set_pipeline_parameters([
+    to_gray_op(),
+    blur_op(),
+    threshold_op(),
+    open_op(),
+],
+{
+"to gray": None,
+"blur": {'size': 3},
+"threshold": {'t': 197},
+"close": {'iterations': 1, 'kernel_size': 9},
+}
+
+# {
+# "to gray": None,
+# "blur": {'size': 3},
+# "threshold": {'t': 213},
+# "close": {'iterations': 1, 'kernel_size': 5},
+# }
+)
 
 gradient_pipeline = [
     to_gray_op(),
@@ -705,14 +738,19 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         img_paths = sys.argv[1:]
         imgs = read_imgs("", img_paths)
+
+        metadata = utilities.read_metadata(img_paths[0])
+        pg = metadata["playground_poly"]
+        imgs = [extract_roi(img, pg, (0)) for img in imgs]
     else:
         imgs = []
         # with open("images/dual-lifecam,raspberry/raspberry-broken-red-balls-playground.result") as path_file:
         #     imgs = read_imgs("", path_file.readlines()[:6])
 
+        # imgs += read_imgs_glob("images/dual-lifecam,raspberry/lifecam/lifecam-*png")
+
         imgs += read_imgs("", glob("images/raspberry/may-2/raspberry-*.png")[:130:3])
         metadata = utilities.read_metadata("images/raspberry/may-2")
-        # imgs += read_imgs_glob("images/dual-lifecam,raspberry/lifecam/lifecam-*png")
 
         pg = metadata["playground_poly"]
         imgs = [extract_roi(img, pg, (0)) for img in imgs]
@@ -733,13 +771,14 @@ if __name__ == '__main__':
         # iterative_blur_pipeline,
         # gradient_pipeline,
         # phase_pipeline,
+        pig_pipeline,
 
         # marker_balls_pipeline1,
         # marker_balls_pipeline2,
         # marker_balls_pipeline3,
 
         # playing_balls_pl_hough,
-        playing_balls_pl_surf,
+        # playing_balls_pl_surf,
 
         # scale_denom=0.5, row_count=3,
         scale_denom=3, row_count=2

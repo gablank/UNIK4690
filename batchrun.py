@@ -96,7 +96,8 @@ if __name__ == "__main__":
         ball_delta_abs_sum = sum(map(lambda x: abs(x[4]-x[3]), stats))
         logger.info("Playground failed: %.2f", failed_pg/n)
         logger.info("Balls failed     : %.2f", failed_balls/n)
-        logger.info("Ball delta error sum : %d", ball_delta_abs_sum)
+        logger.info("Ball error sum     : %d", ball_delta_abs_sum)
+        logger.info("Ball error sum rat : %.2f", ball_delta_abs_sum/(7*n)) # NB! assume 7 balls
 
         with open("stats.json", "w") as fp:
             json.dump(stats, fp) # overwrites on error too... 
