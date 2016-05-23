@@ -112,6 +112,8 @@ class SurfBallDetector:
             return res
 
         def filter_pig_detected_as_playing_ball(kps, pig):
+            if pig is None:
+                return kps
             res = []
             for kp in kps:
                 pig_r = pig[1]
