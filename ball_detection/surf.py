@@ -35,18 +35,19 @@ class SurfBallDetector:
         def minimize_gradients():
             from test import minimize_sum_of_squared_gradients
 
-            ball_matches = []
+            # ball_matches = []
 
             optimized_kps = []
             tot = 0
             for kp in kps:
                 kp_x = kp.pt[0]
                 kp_y = kp.pt[1]
-                search_radius = 18
+                expected_ball_radius = calc_playing_ball_radius(kp.pt)
+                search_radius = 2*expected_ball_radius
                 possible_ball = playground_image.bgr[kp_y - search_radius:kp_y + search_radius, kp_x - search_radius:kp_x + search_radius]
-                score, radius, x, y = minimize_sum_of_squared_gradients(possible_ball)
-                optimized_kps.append(cv2.KeyPoint(x, y, radius, score))
-                ball_matches.append((score, radius, x, y, kp_x, kp_y))
+                score, radius, dx, dy = minimize_sum_of_squared_gradients(possible_ball, expected_ball_radius)
+                optimized_kps.append(cv2.KeyPoint(kp_x+dx, kp_y+dy, radius, score))
+                # ball_matches.append((score, radius, kp_x+dx, kp_y+dy, kp_x, kp_y))
                 tot += score
 
             show(img, keypoints=optimized_kps, scale=True, text="Minimized gradient optimized")
@@ -200,6 +201,8 @@ class SurfBallDetector:
         show(img, keypoints=kps, scale=True, text="Filtered by expected radius")
 
         kps = filter_pig_detected_as_playing_ball(kps, pig)
+
+        kps = minimize_gradients()
 
         # n = len(kps)
         # kps = filter_by_radius(kps)
