@@ -253,7 +253,7 @@ def morph_open(img, kernel_size, iterations):
     img = cv2.dilate(img, kernel, iterations=iterations)
     return img
 
-open_op = lambda: Operation("close", morph_open,
+open_op = lambda: Operation("open", morph_open,
                             {"iterations": (1, (0, 30)), "kernel_size": (3, [3,5,6,9])})
 
 def make_repeated_op(op, n):
