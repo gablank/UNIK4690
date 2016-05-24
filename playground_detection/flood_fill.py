@@ -254,7 +254,7 @@ class FloodFillPlaygroundDetector:
                 point = intersection(l1_p1x, l1_p1y, l1_p2x, l1_p2y, l2_p1x, l2_p1y, l2_p2x, l2_p2y)
                 points.append(point)
 
-            print(points)
+            # print(points)
 
             lines = []
             for idx, pt1 in enumerate(points):
@@ -263,7 +263,7 @@ class FloodFillPlaygroundDetector:
             # sort by line length
             lines.sort(key=lambda x: (x[0][0]-x[1][0])**2 + (x[0][1]-x[1][1])**2)
 
-            print("Lines:", lines)
+            # print("Lines:", lines)
 
             # shortest line is probably one of the short sides
             short_side = lines[0]
@@ -275,9 +275,10 @@ class FloodFillPlaygroundDetector:
                         break
                     if sides_in_order[-1] == line[0]:
                         sides_in_order.append(line[1])
-            print(sides_in_order)
-            show_lines(image, sides_in_order)
-            return sides_in_order
+
+            # show_lines(image, sides_in_order)
+            reversed = sides_in_order[::-1]
+            return reversed[1:] + reversed[:1]
 
         return
 
