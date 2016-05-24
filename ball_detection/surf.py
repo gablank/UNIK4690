@@ -214,7 +214,59 @@ class SurfBallDetector:
         # points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 
         if kps is not None:
-            balls = [((int(kp.pt[0]), int(kp.pt[1])), 1) for kp in kps]
+            ball_averages = []
+            for kp in kps:
+                expected_ball_radius = calc_playing_ball_radius(kp.pt)
+                ball_averages.append(
+                    (
+                        kp
+                    ,
+                        np.average(playground_image.get_bgr()[kp.pt[1]-expected_ball_radius:kp.pt[1]+expected_ball_radius, kp.pt[0]-expected_ball_radius:kp.pt[0]+expected_ball_radius])
+                    )
+                )
+            ball_averages.sort(key=lambda x: x[1])
+
+            new_centers = [ball_averages[0][1], ball_averages[-1][1]]
+            change = True
+            while change:
+                k_means = [(new_centers[0], []), (new_centers[1], [])]
+
+                centers_at_start = [i[0] for i in k_means]
+                for kp, avg in ball_averages:
+                    closest = None
+                    closest_dist = float("INF")
+                    for island in k_means:
+                        dist = abs(island[0] - avg)
+                        if dist < closest_dist:
+                            closest_dist = dist
+                            closest = island
+
+                    closest[1].append((kp, avg))
+
+                new_k_means = []
+                for i in k_means:
+                    kps = []
+                    tot = 0.0
+                    for kp, avg in i[1]:
+                        kps.append((kp, avg))
+                        tot += avg
+                    new_k_means.append((tot / len(kps), kps))
+
+                new_centers = [i[0] for i in new_k_means]
+                change = False
+                for i in range(len(centers_at_start)):
+                    if centers_at_start[i] != new_centers[i]:
+                        change = True
+                        break
+
+            k_means.sort(key=lambda x: x[0])
+            balls = []
+            team_idx = 1
+            for i in k_means:
+                for kp, avg in i[1]:
+                    balls.append(((int(kp.pt[0]), int(kp.pt[1])), team_idx))
+                team_idx += 1
+            #balls = [((int(kp.pt[0]), int(kp.pt[1])), 1) for kp in kps]
         else:
             balls = [((0,0), 0)]
 
