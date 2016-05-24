@@ -13,6 +13,8 @@ class FloodFillPlaygroundDetector:
 
     def detect(self, image):
         best_transformation = self.transformer.get_playground_transformation(image)
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_2_best_transformation.png", utilities.as_uint8(best_transformation))
+        # return
 
         best_transformation = utilities.as_uint8(best_transformation)
         middle = utilities.get_middle(best_transformation)
@@ -22,21 +24,10 @@ class FloodFillPlaygroundDetector:
             best_transformation = 255 - best_transformation
             box = utilities.get_box(best_transformation, middle, 100)
 
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_3_invert.png", utilities.as_uint8(best_transformation))
         blur_size = 5
         best_transformation = cv2.blur(best_transformation, (blur_size, blur_size))
-
-        # hist = cv2.calcHist([best_transformation], [0], None, [256], [0, 256])
-        # hist /= sum(hist)
-
-        # tot = 0.0
-        # idx = 0
-        #
-        # while tot < 0.3:
-        #     tot += hist[idx]
-        #     idx += 1
-
-
-        # utilities.show(utilities.draw_histogram(box))
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_4_blur.png", utilities.as_uint8(best_transformation))
 
         box_hist = utilities.get_histogram(box)
         box_hist /= sum(box_hist)
@@ -48,14 +39,16 @@ class FloodFillPlaygroundDetector:
         while tot_sum < 0.9:
             tot_sum += box_hist[cur]
             if high == 255:
-                low -= 1
+                cur = low - 1
             elif low == 0:
-                high += 1
+                cur = high + 1
             else:
                 if box_hist[high+1] > box_hist[low-1]:
-                    high += 1
+                    cur = high + 1
                 else:
-                    low -= 1
+                    cur = low - 1
+            low = min(low, cur)
+            high = max(high, cur)
 
         def threshold_range(img, lo, hi):
             th_lo = cv2.threshold(img, lo, 255, cv2.THRESH_BINARY)[1]
@@ -64,6 +57,7 @@ class FloodFillPlaygroundDetector:
         print("Thresholding between {} and {}".format(low, high))
 
         best_transformation = threshold_range(best_transformation, low, high)
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_5_threshold.png", utilities.as_uint8(best_transformation))
 
         # ret, best_transformation = cv2.threshold(best_transformation, idx, 255, cv2.THRESH_TOZERO)
         box = utilities.get_box(best_transformation, middle, 100)
@@ -74,17 +68,19 @@ class FloodFillPlaygroundDetector:
         num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
 
         best_transformation[np.where(best_transformation != 255)] = 0
-        # utilities.show(best_transformation)
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_6_flood_fill.png", utilities.as_uint8(best_transformation))
 
         kernel_size = 3
         iterations = 1
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size,kernel_size))
         best_transformation = cv2.erode(best_transformation, kernel, iterations=iterations)
         best_transformation = cv2.dilate(best_transformation, kernel, iterations=iterations-1)
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_7_opening.png", utilities.as_uint8(best_transformation))
 
         best_transformation[np.where(best_transformation == 255)] = 254
         num_filled, best_transformation, _, _ = cv2.floodFill(best_transformation, None, middle, 255, upDiff=0, loDiff=0, flags=cv2.FLOODFILL_FIXED_RANGE)
         best_transformation[np.where(best_transformation != 255)] = 0
+        # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_8_flood_fill_2.png", utilities.as_uint8(best_transformation))
 
         im2, contours, hierarchy = cv2.findContours(best_transformation.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -98,21 +94,23 @@ class FloodFillPlaygroundDetector:
                 polygon = np.concatenate((polygon, contours[idx]))
 
             convex_hull = cv2.convexHull(polygon)
-            # temp = utilities.draw_convex_hull(img, convex_hull)
-            # utilities.show(temp, "contours")
 
             convex_hull = cv2.approxPolyDP(convex_hull, 5, True)
             original_convex_hull = convex_hull.copy()
-            # temp = utilities.draw_convex_hull(img, convex_hull)
-            # utilities.show(temp, "contours")
 
             convex_hull_as_list = []
             for idx in range(len(convex_hull)):
                 vertex = convex_hull[idx][0]
                 convex_hull_as_list.append((vertex[0], vertex[1]))
 
+            temp = best_transformation.copy()
+            temp[np.where(temp == 255)] = 120
+            for idx, v1 in enumerate(convex_hull_as_list):
+                cv2.line(temp, v1, convex_hull_as_list[(idx+1)%len(convex_hull_as_list)], 255, 3)
+            # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_9_convex_hull.png", utilities.as_uint8(temp))
 
             convex_hull_mask = utilities.poly2mask(convex_hull, best_transformation)
+            best_transformation[np.where(convex_hull_mask == 0)] = 0
             convex_hull_n = np.count_nonzero(convex_hull_mask)
             convex_hull_n_white = np.count_nonzero(best_transformation[np.where(convex_hull_mask != 0)])
             convex_hull_density = convex_hull_n_white / convex_hull_n
@@ -139,13 +137,22 @@ class FloodFillPlaygroundDetector:
             #light_mask = transformer.Transformer.get_light_mask(Image(image_data=img))
 
             idx = 0
+            isd = 0
             while idx < len(convex_hull_as_list):
+                temp = best_transformation.copy()
+                temp[np.where(temp == 255)] = 120
+
                 v1 = convex_hull_as_list[(idx-1)%len(convex_hull_as_list)]
                 v2 = convex_hull_as_list[idx]
                 v3 = convex_hull_as_list[(idx+1)%len(convex_hull_as_list)]
 
                 triangle_mask = utilities.poly2mask([v1, v2, v3], best_transformation)
 
+                # temp[np.where((triangle_mask != 0) & (temp != 0))] = 255
+                # temp[np.where((triangle_mask != 0) & (temp == 0))] = 60
+                # utilities.show(temp)
+                # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_10_{}_convex_hull_refinement.png".format(isd), utilities.as_uint8(temp))
+                isd += 1
                 copy[np.where((triangle_mask == 0) & (copy == inside_triangle_filled_color))] = outside_triangle_filled_color
                 copy[np.where((triangle_mask == 0) & (copy == inside_triangle_not_filled_color))] = outside_triangle_not_filled_color
 
@@ -164,11 +171,15 @@ class FloodFillPlaygroundDetector:
                     new_convex_hull.append(v2)
                     idx += 1
                 else:
+                    best_transformation[np.where(triangle_mask != 0)] = 0
                     convex_hull_as_list.remove(v2)
                     copy[np.where(triangle_mask != 0)] = outside_convex_hull_color
 
             def show_lines(image, pts):
-                to_show = image.get_bgr().copy()
+                # to_show = image.get_bgr().copy()
+                to_show = utilities.as_float32(image.original_bgr)
+                # to_show = image.copy()
+                # to_show[:,:] = 0
                 for idx, pt1 in enumerate(pts):
                     if idx % 2 == 0:
                         color = (0, 0, 1)
@@ -176,9 +187,10 @@ class FloodFillPlaygroundDetector:
                         color = (1, 0, 0)
                     pt2 = pts[(idx+1) % len(pts)]
                     cv2.line(to_show, pt1, pt2, color, 3)
+                # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_11_result_2.png", utilities.as_uint8(to_show))
                 utilities.show(to_show, text=image.filename, time_ms=30)
 
-            # show_lines(image, new_convex_hull)
+            # show_lines(best_transformation, new_convex_hull)
 
             convex_hull = []
             for idx, pt in enumerate(new_convex_hull):
@@ -263,7 +275,7 @@ class FloodFillPlaygroundDetector:
                         break
                     if sides_in_order[-1] == line[0]:
                         sides_in_order.append(line[1])
-
+            print(sides_in_order)
             show_lines(image, sides_in_order)
             return sides_in_order
 
@@ -290,13 +302,20 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, histogram_equalization=None)
+                image = Image(file, histogram_equalization="rg_chromaticity")
+                # image = Image(file, histogram_equalization=None)
+                # utilities.show_all(image, time_ms=30)
+                # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_0_original.png", Image(file, histogram_equalization=None).get_bgr(np.uint8))
+                # cv2.imwrite("/home/anders/UNIK4690/project/report/playground_detection_pipeline/step_1_rg_chromaticity.png", image.get_bgr(np.uint8))
+                # utilities.show_all(image, time_ms=30)
+                # continue
             except FileNotFoundError:
                 continue
             except ValueError:
                 continue
 
             flood_fill.detect(image)
+            # exit(0)
 
     except Exception as e:
         import traceback
