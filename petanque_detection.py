@@ -127,6 +127,7 @@ class PetanqueDetection:
         # Output: List of points of same size, defining the playground. First point is considered the origin.
         if interactive:
             camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+        # print(camera_playground_polygon)
 
         if playground_only:
             self.statistics.append(result_for_image + [0,0,0,0])
@@ -536,6 +537,33 @@ class PetanqueDetection:
             cv2.putText(to_show, text, (x, y), font_face, font_scale, (255, 255, 255), thickness)
 
             rank += 1
+
+        # Draw the playground as seen from above
+        import math
+        miniature_scale = 1 / 10
+        mini_playground_width = int(math.ceil(max(i[0] for i in self.real_world_playground_polygon) - min(i[0] for i in self.real_world_playground_polygon)) * miniature_scale)
+        mini_playground_height = int(math.ceil(max(i[1] for i in self.real_world_playground_polygon) - min(i[1] for i in self.real_world_playground_polygon)) * miniature_scale)
+        playground_above = np.zeros((mini_playground_height, mini_playground_width, 3)).astype(np.uint8)
+
+        w_H_a = np.array([miniature_scale, 0, 0, 0, miniature_scale, 0, 0, 0, 1]).reshape((3,3))
+
+        playground_above[:,:,:] = 150
+        def real_world_to_miniature(real_world_pos, real_world_radius):
+            miniature_pos = np.dot(w_H_a, np.array(list(real_world_pos) + [1]))
+            miniature_pos /= miniature_pos[2]
+            return (int(round(miniature_pos[0])), int(round(miniature_pos[1]))), int(round(real_world_radius * miniature_scale))
+
+        miniature_pig_pos, miniature_pig_radius = real_world_to_miniature(pig_position, self.pig_radius)
+
+        cv2.circle(playground_above, miniature_pig_pos, miniature_pig_radius, (255, 255, 255), thickness=-1)
+
+        for (ball_x, ball_y), team in balls_real_world:
+            miniature_ball_pos, miniature_ball_radius = real_world_to_miniature((ball_x, ball_y), self.ball_radius)
+            cv2.circle(playground_above, miniature_ball_pos, miniature_ball_radius, (255, 255, 255), thickness=-1)
+
+        padding = 20
+        to_show[padding:padding+mini_playground_height, 1920-mini_playground_width-padding:1920-padding, :] = playground_above
+
         return to_show
 
 
@@ -575,7 +603,8 @@ if __name__ == "__main__":
         #     break
 
         # filenames = glob("images/microsoft_cam/red_balls/*brightness=40,exposure_absolute=10,saturation=10.png")
-        filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")[:-1:10]
+        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")[:-1:10]
+        filenames = glob("images/raspberry/south/*.png")
         # filenames = glob("images/dual-lifecam,raspberry/lifecam/*.png")
         # filenames = glob("images/microsoft_cam/24h/south/*png")
 
