@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import cv2
 import numpy as np
 import math
@@ -10,6 +10,25 @@ from math import ceil
 import utilities
 from functools import partial
 from utilities import Timer
+from image import Image
+from utilities import pretty_print_keypoint
+
+
+# TODO: Operation representation isn't ideal. See ideas, but it's probably
+#       a bit to gather just by polishing current approach too
+# TODO: Add non-visualized operations
+# IDEA: use parameter annotations to encode parameter specs (range, etc). 
+#       https://www.python.org/dev/peps/pep-3107/#parameters
+#       def my_op_fn(img, param1: (0,10) = start_val, ...)
+#       But not sure if the annotations and default values are mutable.
+#       If not the set_pipeline_parameters (useful to set dumped parameters) might be hard
+#       to implement elgantely?
+# IDEA: extract default parameter values using fun.__defaults__
+# IDEA: click to only show image under mouse (enlarged)
+# hue_images = [pick_channel(to_hsv(img), 0) for img in images]
+# gray_images = [to_gray(img) for img in A_imgs]
+# #pg_images = [extract_roi(img, metadata["playground_poly"], (0)) for img in B_imgs]
+# pg_images = list(map(to_ycrcb, B_imgs))
 
 # parameter spec
 # function: f(slider_ratio) -> value
@@ -155,6 +174,8 @@ def visualize_pipeline(start_images, operations, scale_denom=3, row_count=2):
         elif key == 'q':
             dump_parameters()
             exit(0)
+        elif key == 's':
+            utilities.show_all(Image(image_data=inputs[0]))
 
 
 def blur(img, size):
@@ -232,6 +253,9 @@ def morph_open(img, kernel_size, iterations):
     img = cv2.dilate(img, kernel, iterations=iterations)
     return img
 
+open_op = lambda: Operation("close", morph_open,
+                            {"iterations": (1, (0, 30)), "kernel_size": (3, [3,5,6,9])})
+
 def make_repeated_op(op, n):
     def repeat(img, **kwargs):
         for i in range(n):
@@ -282,6 +306,11 @@ flood_fill_until_op = lambda: Operation("flood fill until", flood_fill_until,
                                         {"box_size": (30, (0,100)),
                                          "min_ratio": (0.2, (0.0, 1.0))})
 
+
+from playground_detection.red_balls import red_ball_transform, normalize_image
+
+from playground_detection.red_balls import blob_detector, surf_detector
+
 def set_pipeline_parameters(pipeline, op_param_map):
     """
     Accepts the output dumped from the gui
@@ -330,13 +359,50 @@ def gradient_length(img, size, order):
 
     return utilities.as_uint8(np.sqrt(Ix**2+Iy**2)) # or just abs(Ix+Iy)?
 
+def single_pixel_gradient(img, which=0):
+    print("org", img.shape)
+    # x_first = img[:-1,:-1].astype(np.int64)
+    x_first = np.roll(img, 1, 1).astype(np.int64)
+    print("xf", x_first.shape)
+    # x_last = img[:-1,1:].astype(np.int64)
+    x_last = img.copy().astype(np.int64)
+    print("xl", x_last.shape)
+    x_first, x_last = x_last, x_first
+
+    # y_first = img[:-1,:-1].astype(np.int64)
+    y_first = np.roll(img, 1, 0).astype(np.int64)
+    print("xf", x_first.shape)
+    # y_last = img[1:,:-1].astype(np.int64)
+    y_last = img.copy().astype(np.int64)
+    print("yl", y_last.shape)
+
+    if which == 0:
+        g = (x_last-x_first)
+    elif which == 1:
+        g = (y_last-y_first)
+    elif which == 2:
+        x_gradient_squared = np.power(x_last - x_first, 2)
+        y_gradient_squared = np.power(y_last - y_first, 2)
+        g = x_gradient_squared+y_gradient_squared
+    elif which == 3:
+        g = ((x_last-x_first) + (y_last-y_first))
+
+    g[np.where(img==0)] = np.mean(g[np.where(img>0)])
+    
+    return utilities.as_uint8(g)
+
+single_pixel_gradient_op = lambda: Operation("spg", single_pixel_gradient,
+                                             { "which": (0, [0,1,2,3])}
+)
+
+
 def gradient(img, size, order, which):
     dx = [order, 0, order]
     dy = [0, order, order]
     kx, ky = cv2.getDerivKernels(dx[which], dy[which], size)
     # img = img.astype(np.float32)
     img = cv2.sepFilter2D(img, cv2.CV_32F, kx, ky)
-    return utilities.as_uint8(np.abs(img))
+    return utilities.as_uint8(img)
     return img
 
 def distance(img, distance_type):
@@ -389,6 +455,7 @@ def cross_response(img, size, width):
 cross_response_op = lambda: Operation("cross response", cross_response, {"size": kernel_parm, "width": (0.3, (0.0, 1.0))})
 
 phase_pipeline = [
+    to_gray_op(),
     blur_op(),
     Operation("phase", phase, {"size": (3, [3, 5, 7, 9, 11, 13, 15, 17, 31]),
                                 "order": (1, [1,2,3,4]),
@@ -398,11 +465,46 @@ phase_pipeline = [
     # threshold_op(cv2.THRESH_BINARY_INV),
 ]
 
-gradient_pipeline = [
+def run_pipeline(img, pipeline, debug=False):
+    for i, op in enumerate(pipeline):
+        if op.params:
+            img = op.op(img, **op.params)
+        else:
+            img = op.op(img)
+        if debug:
+            utilities.show(img, text=op.name)
+
+    return img
+
+pig_pipeline = set_pipeline_parameters([
+    to_gray_op(),
     blur_op(),
-    Operation("grad", gradient, {"size": (3, [1, 3, 5, 7]), "order": (1, [1,2,3,4]), "which": (0, [0, 1, 2])}),
+    threshold_op(),
+    open_op(),
+],
+{
+"to gray": None,
+"blur": {'size': 3},
+"threshold": {'t': 197},
+"close": {'iterations': 1, 'kernel_size': 9},
+}
+
+# {
+# "to gray": None,
+# "blur": {'size': 3},
+# "threshold": {'t': 213},
+# "close": {'iterations': 1, 'kernel_size': 5},
+# }
+)
+
+gradient_pipeline = [
+    to_gray_op(),
+    blur_op(),
+    single_pixel_gradient_op(),
+    # Operation("grad", gradient, {"size": (3, [1, 3, 5, 7, 9, 11]), "order": (1, [1,2,3,4]), "which": (0, [0, 1, 2])}),
     # threshold_op(cv2.THRESH_BINARY_INV),
-    cross_response_op(),
+    # cross_response_op(),
+    # Operation("normalize", normalize_image),   
     # Operation("distance", distance, {"distance_type": (cv2.DIST_L1, [cv2.DIST_L1, cv2.DIST_L2, cv2.DIST_L12, cv2.DIST_C])}),
     # threshold_op(),
 
@@ -444,13 +546,7 @@ def hough(img, min_radius, max_radius, p1, p2):
 hough_op = lambda: Operation("hough", hough, {"min_radius": (5, (1, 50)), "max_radius": (0, (0, 50)),
                                               "p1": (10, (1, 500)), "p2": (10, (1, 500))})
 
-playing_balls_pipeline = set_pipeline_parameters([to_gray_op(), blur_op(), hough_op()],
-                                   {
-                                       "blur": {'size': 11},
-                                       "hough": {'p1': 57, 'p2': 8, 'min_radius': 5, 'max_radius': 14},
-                                   })
 
-from utilities import pretty_print_keypoint
 
 def make_keypoint_viz(fn):
     def wrapper(img, **kwargs):
@@ -460,7 +556,58 @@ def make_keypoint_viz(fn):
         return out
     return wrapper
 
-from playground_detection.red_balls import blob_detector, surf_detector
+
+playing_balls_pl_hough = set_pipeline_parameters(
+    [to_gray_op(), blur_op(), hough_op()],
+    {
+        "to gray": None,
+        "blur": {'size': 11},
+        "hough": {'p2': 10, 'max_radius': 19, 'p1': 60, 'min_radius': 5},
+    }
+)
+
+# {
+#     "blur": {'size': 11},
+#     "hough": {'p1': 57, 'p2': 8, 'min_radius': 5, 'max_radius': 14},
+# }
+
+from utilities import power_threshold
+
+def to_float_wrapper(fn):
+    def wrapped(img, *args, **kwargs):
+        return fn(img/np.max(img), *args, **kwargs)
+    return wrapped
+
+from utilities import transform_image
+from image import Image
+
+trans_params = {'ycrcb_cr': -0.75038994347347221, 'lab_b': 0.3036750425892179, 'bgr_b': -1.1892291465326323, 'lab_a': -0.7428254604861555, 'ycrcb_cn': -0.57301987482036387, 'lab_l': -0.68882136586824594, 'hsv_h': -0.095966576209467969, 'hsv_s': 0.45161636314988052, 'ycrcb_y': -0.21598565380357415, 'hsv_v': -1.3081319744285105, 'bgr_r': -1.2568352180214275, 'bgr_g': 0.49475196208293376}
+
+playing_balls_pl_surf = set_pipeline_parameters(
+    [
+        # to_gray_op(),
+        Operation("trans",
+                  lambda img: utilities.as_uint8(transform_image(Image(image_data=img, histogram_equalization=None), trans_params))),
+        blur_op(),
+        # Operation("trans2", transform, {"a": (0.5, (0.0, 2.0))}),
+        Operation("pow_thresh", to_float_wrapper(power_threshold), {"exponent": (1, (1.0, 10.0))}),
+        Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (300, (100, 10000))})
+    ],
+{
+"trans": None,
+"blur": {'size': 0},
+"pow_thresh": {'exponent': 1.0},
+"surf": {'hess_thresh': 2405},
+}
+
+    # {
+    #     "to gray": None,
+    #     "blur": {'size': 11},
+    #     "pow_thresh": {'exponent': 4.0600000000000005},
+    #     "surf": {'hess_thresh': 1015},
+    # }
+)
+
 
 blob_op = Operation("blob", make_keypoint_viz(blob_detector), {
             "minArea": (10, (0,500)),
@@ -469,7 +616,6 @@ blob_op = Operation("blob", make_keypoint_viz(blob_detector), {
             "blobColor" : (255, (0,255))
         })
 
-from playground_detection.red_balls import red_ball_transform, normalize_image
 
 def transform(img, a=0.5):
     img = img.astype(np.float32)
@@ -483,12 +629,10 @@ marker_balls_pipeline2 = set_pipeline_parameters(
     [
         # Operation("trans2", transform, {"a": (0.5, (0.0, 2.0))}),
         Operation("trans", red_ball_transform, {"exponent": (1, (1.0, 10.0))}),
-        # blob_op,
         Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (300, (100, 10000))})
     ],
     {
         "trans": {'exponent': 5.0},
-        "blob": {'blobColor': 255, 'minArea': 80, 'minDistBetweenBlobs': 100, 'maxArea': 1000},
     }
 )
 
@@ -497,6 +641,7 @@ marker_balls_pipeline3 = set_pipeline_parameters(
         pick_channel_op(),
         # Operation("trans", red_ball_transform, {"exponent": (5, (1.0, 10.0))}),
         Operation("normalize", normalize_image),
+        blur_op(),
         # threshold_op(cv2.THRESH_BINARY),
         Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (1000, (1000, 20000))})
     ],
@@ -536,6 +681,9 @@ def extract_roi(img, region, mask_color=None):
         mask = utilities.poly2mask(region-(x,y), roi)
         roi[np.where(mask == 0)] = mask_color
     return roi 
+
+def apply_mask(img, mask):
+    return cv2.bitwise_and(img, img, mask=mask)
                                    
 
 def read_imgs(base_dir, paths):
@@ -544,79 +692,96 @@ def read_imgs(base_dir, paths):
 def read_imgs_glob(pattern):
     return read_imgs("", glob(pattern))
 
+
+def extract_balls(img, balls, border=2, margin=10):
+    balls = np.array(balls)
+
+    ball_count = len(balls)
+
+    cols = ball_count
+    rows = math.ceil(ball_count / cols)
+
+    req_ball_w = (balls[:,1].sum()+margin*ball_count)*2 # inexact for multi-row, but safe and easy
+    req_ball_h = balls[:,1].max()*2 + margin*2 # inexact for multi-row, but safe and easy
+
+    canvas_shape = ((req_ball_h+border)*rows, req_ball_w+ball_count*border-border, 3)
+    canvas = np.zeros(canvas_shape,
+                      dtype=np.float32)
+
+    tx, ty = 0, 0
+    col = 0
+    for j, circle in enumerate(balls):
+        (x,y), r = circle
+        bb = utilities.circle_bb(circle, margin)
+        h,w = bb[2:]
+
+        # One would think that creating the circle mask repeatedly etc. is slow
+        # but the image loading is way to dominant to care about that
+        canvas[ty:ty+h, tx:tx+w] = extract_rectangle(img, bb)
+        # canvas[ty:ty+h, tx:tx+w] = utilities.extract_circle(img, circle, mask_color=(0,0,0))
+
+        # x,y,w,h = circle_bb(circle)
+        # canvas[ty:ty+h, tx:tx+w] = img[y:y+h, x:x+w]
+
+        tx += w+border
+        col += 1
+        if col == cols:
+            col = 0
+            tx = 0
+            ty += req_ball_h + border
+
+    return canvas
+
+
 if __name__ == '__main__':
     import sys
 
+    metadata = None
     if len(sys.argv) > 1:
         img_paths = sys.argv[1:]
         imgs = read_imgs("", img_paths)
-    else:
-        with open("images/dual-lifecam,raspberry/raspberry-broken-red-balls-playground.result") as path_file:
-            imgs = read_imgs("", path_file.readlines()[:6])
 
-        imgs += read_imgs("", ["images/raspberry/may-2/raspberry-2016-05-02_12:01:35.png"])
-        imgs += read_imgs_glob("images/dual-lifecam,raspberry/lifecam/lifecam-*png")
+        metadata = utilities.read_metadata(img_paths[0])
+        pg = metadata["playground_poly"]
+        imgs = [extract_roi(img, pg, (0)) for img in imgs]
+    else:
+        imgs = []
+        # with open("images/dual-lifecam,raspberry/raspberry-broken-red-balls-playground.result") as path_file:
+        #     imgs = read_imgs("", path_file.readlines()[:6])
+
+        # imgs += read_imgs_glob("images/dual-lifecam,raspberry/lifecam/lifecam-*png")
+
+        imgs += read_imgs("", glob("images/raspberry/may-2/raspberry-*.png")[:130:3])
+        metadata = utilities.read_metadata("images/raspberry/may-2")
+
+        pg = metadata["playground_poly"]
+        imgs = [extract_roi(img, pg, (0)) for img in imgs]
+
+        # balls = metadata["ball_circles"]
+        # ball_imgs = [extract_balls(img, balls, 2, 10) for img in imgs]
+        # imgs = ball_imgs
+
+    
 
     visualize_pipeline(
         # raspberry_images,
-        list(map(to_ycrcb, imgs)),
-        # imgs,
+        # list(map(to_ycrcb, imgs)),
+        imgs,
 
         # warp_pipeline,
         # flood_fill_pipeline,
         # iterative_blur_pipeline,
         # gradient_pipeline,
         # phase_pipeline,
+        pig_pipeline,
+
         # marker_balls_pipeline1,
         # marker_balls_pipeline2,
-        marker_balls_pipeline3,
-        # playing_balls_pipeline,
-        # scale_denom=0.25, row_count=2
+        # marker_balls_pipeline3,
+
+        # playing_balls_pl_hough,
+        # playing_balls_pl_surf,
+
+        # scale_denom=0.5, row_count=3,
         scale_denom=3, row_count=2
     )
-
-    # TODO: Operation representation isn't ideal. See ideas, but it's probably
-    #       a bit to gather just by polishing current approach too
-    # TODO: Add non-visualized operations
-    # IDEA: use parameter annotations to encode parameter specs (range, etc). 
-    #       https://www.python.org/dev/peps/pep-3107/#parameters
-    #       def my_op_fn(img, param1: (0,10) = start_val, ...)
-    #       But not sure if the annotations and default values are mutable.
-    #       If not the set_pipeline_parameters (useful to set dumped parameters) might be hard
-    #       to implement elgantely?
-    # IDEA: extract default parameter values using fun.__defaults__
-    # IDEA: click to only show image under mouse (enlarged)
-    # hue_images = [pick_channel(to_hsv(img), 0) for img in images]
-    # gray_images = [to_gray(img) for img in A_imgs]
-    # #pg_images = [extract_roi(img, metadata["playground_poly"], (0)) for img in B_imgs]
-    # pg_images = list(map(to_ycrcb, B_imgs))
-
-# CRAP
-
-    # balls = [utilities.extract_circle(img, ball_circle, 30) for ball_circle in metadata["ball_circles"]]
-    # balls = list(map(to_gray, balls))
-
-    # to_gray(cv2.imread("twisted_checkerboard.png"))
-
-    # images = list(map(cv2.imread, ["images/microsoft_cam/"+img_path for img_path in img_paths]))
-    # images = [i for i in images if i is not None]
-
-    # base_dir = "images/microsoft_cam/24h/south/"
-
-    # A = [ "2016-04-12_18:59:03.png", "2016-04-12_19:21:04.png",
-    #              "2016-04-12_18:56:04.png" ]
-    # A_imgs = read_imgs(base_dir, A)
-
-    # B_imgs = [cv2.imread(path) for path in
-    #           list(glob("images/red_balls/series-1/*.png"))[0::7]]
-
-
-    # metadata = utilities.read_metadata("images/red_balls/series-1")
-
-    # img = cv2.imread(base_dir+A[0])
-
-    # raspberry_images = read_imgs_glob("images/dual-lifecam,raspberry/raspberry/*.png")
-
-    # img_paths = ["raw/1.jpg", "raw/2.jpg", "raw/3.jpg", "24h/south/latest.png", "24h/south/2016-04-12_18:59:03.png", "24h/south/2016-04-12_19:21:04.png",
-    #              "24h/south/2016-04-12_18:56:04.png", 
-    # ]

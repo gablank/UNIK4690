@@ -115,7 +115,9 @@ def ball_histogram_fun():
 def interactive_set_metadata(img_path, key, use_dir_metadata=True):
     select_fns = { "playground_poly"  : utilities.select_polygon,
                    "ball_circles"     : utilities.select_circles,
-                   "red_ball_circles" : utilities.select_circles}
+                   "red_ball_circles" : utilities.select_circles,
+                   "piglet"           : utilities.select_circles,
+    }
 
     select_fn = select_fns[key]
 
@@ -133,6 +135,8 @@ def interactive_set_metadata(img_path, key, use_dir_metadata=True):
 
 
 if __name__ == '__main__':
+    # ball_histogram_fun()
+    # exit(0)
 
     if len(sys.argv) > 1:
         path = sys.argv[1]
@@ -140,7 +144,7 @@ if __name__ == '__main__':
 
 
     if what == "*":
-        for what in ["playground_poly", "ball_circles", "red_ball_circles"]:
+        for what in ["playground_poly", "ball_circles", "red_ball_circles", "piglet"]:
             print(what)
             interactive_set_metadata(path, what)
     else:

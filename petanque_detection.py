@@ -1,9 +1,11 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+
 from playground_detection.red_balls import RedBallPlaygroundDetector
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
 from playground_detection.manual_playground_detector import ManualPlaygroundDetector
 from ball_detection.hough import HoughBallDetector
+from ball_detection.surf import SurfBallDetector
 from image import Image
 import cv2
 import utilities
@@ -12,6 +14,59 @@ import time
 import numpy as np
 import math
 import os
+import logging
+
+logging.basicConfig() # have to call this to get default console handler...
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
+
+def calc_playground_score(metadata, camera_playground_polygon):
+    if "playground_poly" in metadata:
+        hand_detected = np.array(metadata["playground_poly"])
+        if len(camera_playground_polygon) == 4:
+            score = utilities.playground_score(hand_detected, np.array(camera_playground_polygon))
+        else:
+            score = 0
+        logger.debug("Playground score: % .2f", score)
+        return score
+    return -1
+
+def adjust_points_to_playground_image(pts, camera_playground_polygon):
+    dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
+    adjusted = [(x-dx, y-dy) for (x,y) in pts]
+    return adjusted
+
+
+def calc_ball_score(metadata, camera_playground_polygon, balls):
+    def adjust_circle(c, dx, dy):
+        (x,y), r = c
+        return ((x-dx, y-dy), r)
+
+    if "ball_circles" in metadata:
+        hand_detected = metadata["ball_circles"]
+
+        dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
+
+        piglet_score = 0
+
+        if "piglet" in metadata:
+            hand_detected_piglet = metadata["piglet"][0] # Only one piglet - metadata store list
+            hand_detected_piglet = adjust_circle(hand_detected_piglet, dx, dy)
+
+            piglets = [c for c,team in balls if team == 0]
+            if len(piglets) > 0:
+                piglet = piglets[0]
+                piglet_score = 1 if utilities.distance(hand_detected_piglet[0], piglet) < hand_detected_piglet[1] else 0
+
+        # Adjust hand detected coordinates to playground image only coordinates
+        hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
+
+        score, matches = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
+
+        logger.debug("Ball score  : % .2f %s %s", score, len(balls), len(matches))
+        logger.debug("Piglet score: %d", piglet_score)
+        return score, len(hand_detected), matches, piglet_score
+    return -1, 0, [], 0
 
 
 class PetanqueDetection:
@@ -40,12 +95,18 @@ class PetanqueDetection:
         self._mouse_position = None
         self._win_name = "Petanque detector"
         self._window = cv2.namedWindow(self._win_name)
+        # Results per image:
+        # List of [<filename>, <playground_score>, <ball_score>, <#detected_balls>, <#real_balls>]
+        self.statistics = []
 
-    def detect(self, image):
+    def detect(self, image, interactive=True, playground_only=False):
         """
         This is the main function used for detection. It is a pipeline where the inputs and outputs from the
         blocks are required to be of a specific format.
         """
+        metadata = image.get_metadata()
+        result_for_image = [image.path]
+
         # Playground detection
         # Input: image: Image
         # Output: List of points of the same length as self.playground_polygon (even if it failed to detect anything!)
@@ -53,10 +114,23 @@ class PetanqueDetection:
         # the convex hull of the points.
         camera_playground_polygon = self.playground_detector.detect(image)
 
+        playground_score = calc_playground_score(metadata, camera_playground_polygon)
+        result_for_image.append(playground_score)
+
+        if len(camera_playground_polygon) != 4:
+            # Detection failed, create a dummy polygon for user to adjust
+            # TODO: fix ordering
+            camera_playground_polygon = [(100,100), (200,100), (200,200), (100,200)]
+
         # Playground detection adjustment
         # Input: Original image, polygon defining the playground as list of points
         # Output: List of points of same size, defining the playground. First point is considered the origin.
-        camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+        if interactive:
+            camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
+
+        if playground_only:
+            self.statistics.append(result_for_image + [0,0,0,0])
+            return self.statistics[-1]
 
         # Homography estimation
         # Input: Camera playground polygon as a numpy array of points,
@@ -68,26 +142,36 @@ class PetanqueDetection:
         # Input: Original image, polygon defining the playground as list of points
         # Output: Image of the size of the bounding rectangle (not angled!) of the playground, with all pixels outside
         # the playground set to BGR (0,0,0)
-        playground_image, w_H_p = self._get_playground_image(image, camera_playground_polygon, w_H_i)
+        playground_image, w_H_p, playground_mask = self._get_playground_image(image, camera_playground_polygon, w_H_i)
 
+        playground_polygon = adjust_points_to_playground_image(camera_playground_polygon, camera_playground_polygon)
         # Ball detection
         # Input: Image of the playground, homography from that image to the real world positions
         # Output: List of tuples of two items. First item is the position (tuple:(x,y)), second item is the team number
         # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
-        balls = self.ball_detector.detect(playground_image, w_H_p)
+        balls = self.ball_detector.detect(playground_image, w_H_p, playground_polygon, playground_mask)
+
+        ball_score, actual_count, matches, piglet_score = calc_ball_score(metadata, camera_playground_polygon, balls)
+        result_for_image.extend([ball_score, len(balls), actual_count, piglet_score])
 
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
         # Output: List of points where the balls are, not necessarily the same size as the corresponding input
         # Uses positions in the playground_image!
-        balls = self._user_adjust_balls(playground_image, balls, w_H_p)
+        if interactive:
+            balls = self._user_adjust_balls(playground_image, balls, w_H_p)
 
-        # Show result
-        # Input: Original image, list of points where the balls are in playground_image coordinates
-        # Output: Balls and their ranks drawn onto and BGR image
-        result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
+        self.statistics.append(result_for_image)
 
-        utilities.show(result, self._win_name)
+        if interactive:
+            # Show result
+            # Input: Original image, list of points where the balls are in playground_image coordinates
+            # Output: Balls and their ranks drawn onto and BGR image
+            result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
+
+            utilities.show(result, self._win_name)
+
+        return result_for_image
 
     def _user_adjust_playground(self, image, playground_polygon):
         userdata = {}
@@ -220,7 +304,6 @@ class PetanqueDetection:
         return userdata["polygon"]
 
     def _user_adjust_balls(self, image, balls, w_H_p):
-        p_H_w = np.linalg.inv(w_H_p)
         userdata = {}
         userdata["pressed_idx"] = None
         userdata["mouseover_idx"] = None
@@ -255,34 +338,13 @@ class PetanqueDetection:
                 pressed = balls[pressed_idx] if pressed_idx is not None else None
                 mouseover = balls[mouseover_idx] if mouseover_idx is not None else None
 
-                def get_playground_image_radius(playground_position, real_world_radius):
-                    world_pos = np.dot(w_H_p, np.array([playground_position[0], playground_position[1], 1]).reshape((3,1)))
-                    world_pos /= world_pos[2][0]
-                    d_pos = np.dot(w_H_p, np.array([playground_position[0]+10000, playground_position[1], 1]).reshape((3,1)))
-                    d_pos /= d_pos[2][0]
-                    delta_world = d_pos - world_pos
-                    x, y = delta_world[0][0], delta_world[1][0]
-                    # TODO: Check for x == 0
-                    a = y / x
-
-                    new_x = math.sqrt(real_world_radius**2/(a**2 + 1))
-                    new_y = a*new_x
-                    new_x += world_pos[0][0]
-                    new_y += world_pos[1][0]
-                    new_world_pos = np.array([new_x, new_y, 1]).reshape((3,1))
-                    new_screen_pos = np.dot(p_H_w, new_world_pos)
-                    new_screen_pos /= new_screen_pos[2][0]
-
-                    cur_world_pos_numpy = np.array([playground_position[0], playground_position[1], 1]).reshape((3,1))
-                    diff = new_screen_pos - cur_world_pos_numpy
-                    return int(round(math.sqrt(diff[0][0]**2 + diff[1][0]**2)))
 
                 for idx, ball in enumerate(balls):
                     ball_position = ball[0]
                     ball_team = ball[1]
                     color = ball_colors[ball_team]
                     ball_real_world_radius = self.pig_radius if ball_team == 0 else self.ball_radius
-                    radius = get_playground_image_radius(ball_position, ball_real_world_radius)
+                    radius = self.get_playground_image_radius(ball_position, ball_real_world_radius, w_H_p)
 
                     if ball in (mouseover, pressed):
                         radius *= 1.3
@@ -405,7 +467,30 @@ class PetanqueDetection:
         # Then multiply them together to get the homography from the playground_image to real world
         w_H_p = np.dot(w_H_i, i_H_p)
 
-        return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p
+        return Image(image_data=playground_bgr, histogram_equalization=None), w_H_p, playground_mask
+
+    def get_playground_image_radius(self, playground_position, real_world_radius, w_H_p):
+        p_H_w = np.linalg.inv(w_H_p)
+        world_pos = np.dot(w_H_p, np.array([playground_position[0], playground_position[1], 1]).reshape((3,1)))
+        world_pos /= world_pos[2][0]
+        d_pos = np.dot(w_H_p, np.array([playground_position[0]+10000, playground_position[1], 1]).reshape((3,1)))
+        d_pos /= d_pos[2][0]
+        delta_world = d_pos - world_pos
+        x, y = delta_world[0][0], delta_world[1][0]
+        # TODO: Check for x == 0
+        a = y / x
+
+        new_x = math.sqrt(real_world_radius**2/(a**2 + 1))
+        new_y = a*new_x
+        new_x += world_pos[0][0]
+        new_y += world_pos[1][0]
+        new_world_pos = np.array([new_x, new_y, 1]).reshape((3,1))
+        new_screen_pos = np.dot(p_H_w, new_world_pos)
+        new_screen_pos /= new_screen_pos[2][0]
+
+        cur_world_pos_numpy = np.array([playground_position[0], playground_position[1], 1]).reshape((3,1))
+        diff = new_screen_pos - cur_world_pos_numpy
+        return int(round(math.sqrt(diff[0][0]**2 + diff[1][0]**2)))
 
     def _draw_distance_to_pig(self, image, balls,
                               w_H_i,
@@ -455,10 +540,13 @@ class PetanqueDetection:
 
 
 if __name__ == "__main__":
-    petanque_detection = PetanqueDetection()
+    # petanque_detection = PetanqueDetection()
     # petanque_detection = PetanqueDetection(PlaygroundDetector=ManualPlaygroundDetector,
-    #                                        BallDetector=HoughBallDetector
-    # )
+    #                                        BallDetector=HoughBallDetector)
+    # petanque_detection = PetanqueDetection(PlaygroundDetector=RedBallPlaygroundDetector,
+    #                                        BallDetector=HoughBallDetector)
+    petanque_detection = PetanqueDetection(PlaygroundDetector=RedBallPlaygroundDetector,
+                                           BallDetector=SurfBallDetector)
 
     import os
     import sys
@@ -487,11 +575,16 @@ if __name__ == "__main__":
         #     break
 
         # filenames = glob("images/microsoft_cam/red_balls/*brightness=40,exposure_absolute=10,saturation=10.png")
-        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
-        # filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")
-        filenames = glob("images/microsoft_cam/24h/south/*png")
+        filenames = glob("images/dual-lifecam,raspberry/raspberry/*.png")[:-1:10]
+        # filenames = glob("images/dual-lifecam,raspberry/lifecam/*.png")
+        # filenames = glob("images/microsoft_cam/24h/south/*png")
 
         filenames.sort()
+
+        # Selectively turn on debugging (see make_debug_toggable)
+        # os.environ["DEBUG"] = "surf"
+        # os.environ["DEBUG"] = "surf,pig"
+        # os.environ["DEBUG"] = "pig"
 
     try:
         for file in filenames:

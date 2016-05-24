@@ -8,46 +8,12 @@ import logging
 
 logging.basicConfig() # omg..
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
-from utilities import distance
+from utilities import distance, power_threshold, make_debug_toggable, keypoint_filter_overlapping
 
-def keypoint_filter_overlapping(kps):
-    """
-    The surf detector often finds multiple key points close to each other.
-    Here we simply looks naively for overlapping points reducing each "cluster"
-    to just one point. (Selecting the largest one)
-    This seems to work for some common cases at least.
-    """
-    if len(kps) > 150:
-        print("Not dimensioned for huge number of key points O(N^2)")
-        return kps
 
-    def overlapping(it, kps):
-        # NB: includes itself in result
-        overlaps = []
-        complement = []
-        for kp in kps:
-            dist = distance(it.pt, kp.pt)
-            # Assuming 'size' is the radius (?)
-            if dist < kp.size+it.size:
-                overlaps.append(kp)
-            else:
-                complement.append(kp)
-
-        return overlaps, complement
-
-    filtered = []
-
-    kps = sorted(kps, key=lambda kp: kp.size)
-    # We don't find transitive overlaps, but we do check the largest key points first
-    while len(kps) > 0:
-        kp = kps[-1]
-        cluster, kps = overlapping(kp, kps)
-        # Note the key points also have a 'response' field.
-        filtered.append(max(cluster, key=lambda kp: kp.size))
-
-    return filtered
+show = make_debug_toggable(utilities.show, "red")
 
 
 def red_ball_transform(image, exponent=1):
@@ -63,20 +29,8 @@ def red_ball_transform(image, exponent=1):
     # purpose!
     Cr = img[:,:,1]
 
-    return red_ball_power_threshold(Cr, exponent)
+    return power_threshold(Cr, exponent)
 
-def red_ball_power_threshold(Cr, exponent):
-    # Exponentiating the Cr channel (as a float image [0,1]) creates sort of a soft threshold.
-    # (Suppressing darker values)
-    Cr = np.power(Cr, exponent)
-
-    amax = np.amax(Cr)
-    light = Cr / amax
-    light *= 255
-    light = np.clip(light, 0, 255)
-    light = light.astype(np.uint8)
-
-    return light
 
 def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blobColor = 255):
     lightBlobParams = cv2.SimpleBlobDetector_Params()
@@ -87,6 +41,7 @@ def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blo
     lightBlobParams.blobColor = blobColor
     lightBlobParams.filterByColor = False
     lightBlobParams.filterByConvexity = False
+    lightBlobParams.filterByCircularity = True
     lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
 
     kpLight = lightBlobDetector.detect(img)
@@ -118,15 +73,6 @@ def surf_detector(img, hess_thresh=3000):
 
     return kps
 
-def make_debug_toggable(fn):
-    import os
-    def wrapped(*args, **kwargs):
-        if os.environ.get("DEBUG", "0") == "0":
-            return
-        fn(*args, **kwargs)
-
-    return wrapped
-
 
 class RedBallPlaygroundDetector:
     """
@@ -149,35 +95,64 @@ class RedBallPlaygroundDetector:
                 # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
             }
             img = red_ball_transform(image, **params["trans"])
+            show(img, scale=True)
             kps = blob_detector(img, **params["blob"])
-
+            show(img, keypoints=kps, scale=True)
             return kps
 
-        show = make_debug_toggable(utilities.show)
+        def morph():
+            from pipeline_visualizer import morph_open
+            # Works well for rasberry west:
+            # image.py no color normalization
+            Cr = image.get_ycrcb(np.uint8)[:,:,1]
+            # Cr = image.get_bgr(np.uint8)[:,:,2]
+            temp = Cr
+            show(temp, scale=True)
+            temp = normalize_image(temp)
+            show(temp, scale=True)
+            temp = threshold_rel(Cr, 230/255) #, cv2.THRESH_TOZERO_INV)
+            show(temp, scale=True)
+            temp = morph_open(temp, 3, 4)
+            # temp = cv2.blur(temp, (5,5))
+            show(temp, scale=True)
+            # temp = power_threshold(temp/255.0, 5)
+            # show(temp, scale=True)
+            kps = surf_detector(temp, hess_thresh=4000)
+            # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
+            # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+            show(temp, keypoints=kps, scale=True)
+            return kps
 
         def surf():
             # Works well for rasberry west:
             # image.py no color normalization
             Cr = image.get_ycrcb(np.uint8)[:,:,1]
+            # Cr = image.get_bgr(np.uint8)[:,:,2]
             temp = Cr
-            # temp = threshold_rel(Cr, 208/255)
-            temp = normalize_image(temp)
+            # show(temp, scale=True)
+            # temp = normalize_image(temp)
+            # show(temp, scale=True)
+            # temp = threshold_rel(Cr, 188/255) #, cv2.THRESH_TOZERO_INV)
+            # show(temp, scale=True)
+            # temp = cv2.blur(temp, (5,5))
             show(temp, scale=True)
-            temp = red_ball_power_threshold(temp/255.0, 5)
-            show(temp, scale=True)
+            temp = power_threshold(temp/255.0, 5)
+            # show(temp, scale=True)
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
-            print("\n".join(map(utilities.pretty_print_keypoint, kps)))
+            # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
             show(temp, keypoints=kps, scale=True)
             return kps
 
+        # kps = morph()
         kps = surf()
+        # kps = blob()
 
         points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 
         if len(points) != 4:
             logger.debug("Found fewer than/more than 4 point (%s)", len(points))
-            raise RuntimeError("Could not detect playground")
+            return points
 
 
         # Now we need to pair the detected points with the known real
@@ -204,7 +179,7 @@ class RedBallPlaygroundDetector:
 
         def cv_convex_hull_to_list(convex_hull):
             """
-            cv2.convectHull wraps the points in extra lists for some reason.
+            cv2.convexHull wraps the points in extra lists for some reason.
             Unwrap and return as a python lists (of tuples) instead of a numpy array
             """
             convex_hull_as_list = []

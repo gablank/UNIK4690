@@ -6,6 +6,10 @@ import json
 import os
 import time
 import random
+import sys
+import datetime
+from image import Image
+
 
 
 def get_middle(img):
@@ -32,11 +36,15 @@ def draw_label(to_show, text):
     cv2.rectangle(to_show, (x_pos-padding, y_pos-text_size[1]-padding), (x_pos+text_size[0]+padding, y_pos+padding), (0, 0, 0), cv2.FILLED)
     cv2.putText(to_show, text, (x_pos, y_pos), font_face, font_scale, (255, 255, 255), thickness)
 
-
-def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False):
+global_shown_history = []
+global_show_i = 0
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False, keep=True):
     """
     Show img in a window
     """
+
+    global global_show_i
+
     if fullscreen:
         cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
         cv2.setWindowProperty(win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -74,11 +82,35 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
                 y_pos += hist.shape[1] + y_padding
 
     cv2.imshow(win_name, to_show)
+    if keep:
+        global_shown_history.append(to_show)
+        global_show_i = len(global_shown_history)-1
+
 
     while True:
         key = cv2.waitKey(time_ms)
-        if key % 256 == ord('q'):
+        char_key = key % 256
+        if char_key == ord('q'):
             exit(0)
+
+        if char_key == ord('w'):
+            now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S.png")
+            cv2.imwrite("imshow_"+now, to_show)
+        elif char_key == ord('a'):
+            return show_all(Image(image_data=img))
+        elif char_key == ord('n'):
+            if global_show_i < len(global_shown_history)-1:
+                global_show_i += 1
+                return show(global_shown_history[global_show_i], keep=False)
+            else:
+                continue
+
+        elif char_key == ord('p'):
+            if global_show_i > 0:
+                global_show_i -= 1
+                return show(global_shown_history[global_show_i], keep=False)
+            else:
+                continue
 
         if time_ms > 0:
             break
@@ -667,6 +699,8 @@ def matching_balls(known, detected, match_threshold_factor=1.0):
     unmatched = list(detected)
 
     for ball in known:
+        if len(unmatched) == 0:
+            break
         center, r = ball
         match_idx, best_match = min(enumerate(unmatched), key=lambda x: distance(center, x[1]))
         d = distance(center, best_match)
@@ -686,22 +720,24 @@ def ball_detection_score(known, detected):
     # - precision (same as accuracy in this case)
     # - recall
     # - F-score
-    match_count = len(matching_balls(known, detected))
+    matches = matching_balls(known, detected)
+    match_count = len(matches)
 
     recall = match_count / len(known) 
     precision = match_count / len(detected) 
     if recall + precision < 0.000000001:
         return 0, len(detected)
     # F-score, beta = 1:
-    return 2*recall*precision / (recall + precision), len(detected)
+    return 2*recall*precision / (recall + precision), matches
 
 
 
-def circle_bb(circle):
+def circle_bb(circle, margin=0):
     """
     Bounding box of a circle represeted by ((cx,cy), r)
     """
     (cx,cy), r = circle
+    r = r+margin
     x, y = cx-r, cy-r
 
     # How to interpret radius and center in a pixel world?
@@ -723,9 +759,76 @@ def extract_circle(img, circle, margin=0, mask_color=None):
         roi[np.where(mask == 0)] = mask_color
     return roi
 
+def extract_bb(img, r):
+    x,y,w,h = r
+    return img[y:y+h, x:x+w]
+
 def pretty_print_keypoint(kp):
     return "<(%.0f, %.0f), %d, %.1f, %d>" % (kp.pt[0], kp.pt[1], kp.size, kp.response, kp.octave)
 
+
+def power_threshold(float_img, exponent):
+    # Exponentiating the float_img channel (as a float image [0,1]) creates sort of a soft threshold.
+    # (Suppressing darker values)
+    float_img = np.power(float_img, exponent)
+
+    amax = np.amax(float_img)
+    light = float_img / amax
+    light *= 255
+    light = np.clip(light, 0, 255)
+    light = light.astype(np.uint8)
+
+    return light
+
+
+def make_debug_toggable(fn, key=""):
+    import os
+    def wrapped(*args, **kwargs):
+        value = os.environ.get("DEBUG")
+        if value is None:
+            return
+        if key in value:
+            return fn(*args, **kwargs)
+
+    return wrapped
+
+
+def keypoint_filter_overlapping(kps):
+    """
+    The surf detector often finds multiple key points close to each other.
+    Here we simply looks naively for overlapping points reducing each "cluster"
+    to just one point. (Selecting the largest one)
+    This seems to work for some common cases at least.
+    """
+    if len(kps) > 150:
+        print("Not dimensioned for huge number of key points O(N^2)", file=sys.stderr)
+        return kps
+
+    def overlapping(it, kps):
+        # NB: includes itself in result
+        overlaps = []
+        complement = []
+        for kp in kps:
+            dist = distance(it.pt, kp.pt)
+            # Seems kp.size is the diameter (ish at least.. it's a bit unclear..)
+            if dist < kp.size/2+it.size:
+                overlaps.append(kp)
+            else:
+                complement.append(kp)
+
+        return overlaps, complement
+
+    filtered = []
+
+    kps = sorted(kps, key=lambda kp: kp.size)
+    # We don't find transitive overlaps, but we do check the largest key points first
+    while len(kps) > 0:
+        kp = kps[-1]
+        cluster, kps = overlapping(kp, kps)
+        # Note the key points also have a 'response' field.
+        filtered.append(max(cluster, key=lambda kp: kp.size))
+
+    return filtered
 
 
 if __name__ == "__main__":
