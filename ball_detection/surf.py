@@ -153,7 +153,7 @@ class SurfBallDetector:
             Discards any keypoints intersecting the playground edges.
             (All keypoint-centers are assumed to be within the playground)
             """
-            lines = list(zip(playground_polygon, playground_polygon[1:]+playground_polygon[:0]))
+            lines = list(zip(playground_polygon, playground_polygon[1:]+playground_polygon[:1]))
             res = []
             for kp in kps:
                 min_dist_to_edge = min([utilities.distance_point_to_bounded_line(pt1, pt2, kp.pt) for (pt1, pt2) in lines])
