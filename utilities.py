@@ -96,6 +96,7 @@ def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_hist
         if char_key == ord('w'):
             now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S.png")
             cv2.imwrite("imshow_"+now, to_show)
+            continue
         elif char_key == ord('a'):
             return show_all(Image(image_data=img))
         elif char_key == ord('n'):
