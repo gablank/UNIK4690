@@ -494,7 +494,8 @@ pig_pipeline = set_pipeline_parameters([
 {
 "to gray": None,
 "blur": {'size': 3},
-"threshold": {'t': 197},
+# "threshold": {'t': 197},
+"threshold": {'t': 228},
 "close": {'iterations': 1, 'kernel_size': 9},
 }
 
