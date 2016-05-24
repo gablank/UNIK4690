@@ -32,19 +32,28 @@ class SurfBallDetector:
         show = make_debug_toggable(utilities.show, "surf")
         petanque_detection = self.petanque_detection
 
-        def minimize_gradients():
+        def minimize_gradients(kps):
             from test import minimize_sum_of_squared_gradients
 
             # ball_matches = []
 
             optimized_kps = []
             tot = 0
+            import math
             for kp in kps:
-                kp_x = kp.pt[0]
-                kp_y = kp.pt[1]
+                kp_x = int(math.ceil(kp.pt[0]))
+                kp_y = int(math.ceil(kp.pt[1]))
                 expected_ball_radius = calc_playing_ball_radius(kp.pt)
-                search_radius = 2*expected_ball_radius
-                possible_ball = playground_image.bgr[kp_y - search_radius:kp_y + search_radius, kp_x - search_radius:kp_x + search_radius]
+                search_radius = int(math.ceil(2*expected_ball_radius))
+
+                y_from = max(0, kp_y - search_radius)
+                y_to = min(playground_image.get_bgr().shape[0], kp_y + search_radius)
+                x_from = max(0, kp_x - search_radius)
+                x_to = min(playground_image.get_bgr().shape[1], kp_x + search_radius)
+                print(y_from, y_to, x_from, x_to, expected_ball_radius)
+
+                possible_ball = playground_image.bgr[y_from:y_to, x_from:x_to]
+
                 score, radius, dx, dy = minimize_sum_of_squared_gradients(possible_ball, expected_ball_radius)
                 optimized_kps.append(cv2.KeyPoint(kp_x+dx, kp_y+dy, radius, score))
                 # ball_matches.append((score, radius, kp_x+dx, kp_y+dy, kp_x, kp_y))
@@ -202,7 +211,7 @@ class SurfBallDetector:
 
         kps = filter_pig_detected_as_playing_ball(kps, pig)
 
-        kps = minimize_gradients()
+        kps = minimize_gradients(kps)
 
         # n = len(kps)
         # kps = filter_by_radius(kps)
@@ -213,20 +222,28 @@ class SurfBallDetector:
 
         # points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
 
+
         if kps is not None:
+            bgr = playground_image.get_bgr()
             ball_averages = []
             for kp in kps:
                 expected_ball_radius = calc_playing_ball_radius(kp.pt)
+                y_from = int(max(0, math.ceil(kp.pt[1]-expected_ball_radius)))
+                y_to = int(min(bgr.shape[0], math.ceil(kp.pt[1]+expected_ball_radius)))
+                x_from = int(min(bgr.shape[1], math.ceil(kp.pt[0]-expected_ball_radius)))
+                x_to = int(max(0, math.ceil(kp.pt[0]+expected_ball_radius)))
+                
                 ball_averages.append(
                     (
                         kp
                     ,
-                        np.average(playground_image.get_bgr()[kp.pt[1]-expected_ball_radius:kp.pt[1]+expected_ball_radius, kp.pt[0]-expected_ball_radius:kp.pt[0]+expected_ball_radius])
+                        np.average(bgr[y_from:y_to, x_from:x_to])
                     )
                 )
             ball_averages.sort(key=lambda x: x[1])
 
             new_centers = [ball_averages[0][1], ball_averages[-1][1]]
+
             change = True
             while change:
                 k_means = [(new_centers[0], []), (new_centers[1], [])]
@@ -241,7 +258,8 @@ class SurfBallDetector:
                             closest_dist = dist
                             closest = island
 
-                    closest[1].append((kp, avg))
+                    if closest is not None:
+                        closest[1].append((kp, avg))
 
                 new_k_means = []
                 for i in k_means:
@@ -250,9 +268,13 @@ class SurfBallDetector:
                     for kp, avg in i[1]:
                         kps.append((kp, avg))
                         tot += avg
-                    new_k_means.append((tot / len(kps), kps))
+                    if len(kps) != 0:
+                        new_k_means.append((tot / len(kps), kps))
+                    else:
+                        new_k_means.append((i[0], []))
 
                 new_centers = [i[0] for i in new_k_means]
+
                 change = False
                 for i in range(len(centers_at_start)):
                     if centers_at_start[i] != new_centers[i]:
@@ -261,11 +283,11 @@ class SurfBallDetector:
 
             k_means.sort(key=lambda x: x[0])
             balls = []
-            team_idx = 1
+            team_idx = 2
             for i in k_means:
                 for kp, avg in i[1]:
                     balls.append(((int(kp.pt[0]), int(kp.pt[1])), team_idx))
-                team_idx += 1
+                team_idx -= 1
             #balls = [((int(kp.pt[0]), int(kp.pt[1])), 1) for kp in kps]
         else:
             balls = [((0,0), 0)]
