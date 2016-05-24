@@ -465,14 +465,23 @@ phase_pipeline = [
     # threshold_op(cv2.THRESH_BINARY_INV),
 ]
 
+def apply_op(img, op, debug=False, params={}):
+    if op.name in params:
+        p = params[op.name]
+    else:
+        p = op.params
+
+    if p:
+        img = op.op(img, **p)
+    else:
+        img = op.op(img)
+    if debug:
+        utilities.show(img, text=op.name, scale=True)
+    return img
+    
 def run_pipeline(img, pipeline, debug=False):
     for i, op in enumerate(pipeline):
-        if op.params:
-            img = op.op(img, **op.params)
-        else:
-            img = op.op(img)
-        if debug:
-            utilities.show(img, text=op.name)
+        img = apply_op(img, op, debug)
 
     return img
 
@@ -609,12 +618,13 @@ playing_balls_pl_surf = set_pipeline_parameters(
 )
 
 
-blob_op = Operation("blob", make_keypoint_viz(blob_detector), {
-            "minArea": (10, (0,500)),
-            "maxArea": (500, (0,2000)),
-            "minDistBetweenBlobs": (100, (0,1000)),
-            "blobColor" : (255, (0,255))
-        })
+blob_op = lambda: Operation("blob", make_keypoint_viz(blob_detector), {
+    "minArea": (10, (0,500)),
+    "maxArea": (500, (0,4000)),
+    "minDistBetweenBlobs": (100, (0,1000)),
+    "blobColor" : (255, [0,255]),
+    "minCircularity": (0.7, (0.0, 1.0)),
+})
 
 
 def transform(img, a=0.5):
@@ -623,13 +633,31 @@ def transform(img, a=0.5):
     diff = np.clip(diff, 0, 255)
     return utilities.as_uint8(diff)
 
+# a bit too high minArea
+# params_marker_balls_blob = {
+#     "threshold": {'t': 192},
+#     "blob": {'maxArea': 2459, 'blobColor': 255, 'minDistBetweenBlobs': 338, 'minCircularity': 0.46, 'minArea': 56},
+# }
+params_marker_balls_blob = {
+"threshold": {'t': 192},
+"blob": {'minDistBetweenBlobs': 338, 'maxArea': 2459, 'minArea': 43, 'minCircularity': 0.46, 'blobColor': 255},
+}
+
+marker_balls_blob = set_pipeline_parameters(
+    [
+        threshold_op(),
+        blob_op()
+    ],
+    params_marker_balls_blob
+)
 
 # assumes ycrcb image as input
 marker_balls_pipeline2 = set_pipeline_parameters(
     [
         # Operation("trans2", transform, {"a": (0.5, (0.0, 2.0))}),
-        Operation("trans", red_ball_transform, {"exponent": (1, (1.0, 10.0))}),
-        Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (300, (100, 10000))})
+        # Operation("trans", red_ball_transform, {"exponent": (1, (1.0, 10.0))}),
+        threshold_op(),
+        Operation("surf", make_keypoint_viz(surf_detector), {"hess_thresh": (4000, (100, 10000))})
     ],
     {
         "trans": {'exponent': 5.0},
@@ -741,9 +769,10 @@ if __name__ == '__main__':
         img_paths = sys.argv[1:]
         imgs = read_imgs("", img_paths)
 
-        metadata = utilities.read_metadata(img_paths[0])
-        pg = metadata["playground_poly"]
-        imgs = [extract_roi(img, pg, (0)) for img in imgs]
+        # metadata = utilities.read_metadata(img_paths[0])
+        # pg = metadata["playground_poly"]
+        # imgs = [extract_roi(img, pg, (0)) for img in imgs]
+        imgs = [to_ycrcb(img)[:,:,1] for img in imgs]
     else:
         imgs = []
         # with open("images/dual-lifecam,raspberry/raspberry-broken-red-balls-playground.result") as path_file:
@@ -773,8 +802,9 @@ if __name__ == '__main__':
         # iterative_blur_pipeline,
         # gradient_pipeline,
         # phase_pipeline,
-        pig_pipeline,
+        # pig_pipeline,
 
+        marker_balls_blob,
         # marker_balls_pipeline1,
         # marker_balls_pipeline2,
         # marker_balls_pipeline3,

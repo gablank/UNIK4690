@@ -4,6 +4,7 @@ import numpy as np
 import utilities
 from image import Image
 import logging
+import os
 
 
 logging.basicConfig() # omg..
@@ -32,16 +33,18 @@ def red_ball_transform(image, exponent=1):
     return power_threshold(Cr, exponent)
 
 
-def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, blobColor = 255):
+def blob_detector(img, minArea=10, maxArea = 500, minDistBetweenBlobs = 100, minCircularity=0.7, maxCircularity=1.0, blobColor = 255):
     lightBlobParams = cv2.SimpleBlobDetector_Params()
     lightBlobParams.filterByArea = True
     lightBlobParams.minArea = minArea
     lightBlobParams.maxArea = maxArea
     lightBlobParams.minDistBetweenBlobs = minDistBetweenBlobs
     lightBlobParams.blobColor = blobColor
-    lightBlobParams.filterByColor = False
+    lightBlobParams.filterByColor = True
     lightBlobParams.filterByConvexity = False
     lightBlobParams.filterByCircularity = True
+    lightBlobParams.minCircularity = minCircularity
+    lightBlobParams.maxCircularity = maxCircularity
     lightBlobDetector = cv2.SimpleBlobDetector_create(lightBlobParams)
 
     kpLight = lightBlobDetector.detect(img)
@@ -83,21 +86,17 @@ class RedBallPlaygroundDetector:
 
     def detect(self, image):
 
+        debug = "red" in os.environ.get("DEBUG", "")
+
         def blob():
             # Quick and dirty from pipeline_visualizer
-            params = {
-                "trans": {'exponent': 5},
+            from pipeline_visualizer import apply_op, threshold_op, blob_op, params_marker_balls_blob as params
 
-                # Works best with lifecam south images:
-                "blob": {'minArea': 15, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
-
-                # Works best with rasberry west images:
-                # "blob": {'minArea': 80, 'minDistBetweenBlobs': 120, 'blobColor': 255, 'maxArea': 208},
-            }
-            img = red_ball_transform(image, **params["trans"])
+            show(image.bgr, scale=True)
+            img = image.get_ycrcb(np.uint8)[:,:,1]
             show(img, scale=True)
+            img = apply_op(img, threshold_op(), debug=debug, params=params)
             kps = blob_detector(img, **params["blob"])
-            show(img, keypoints=kps, scale=True)
             return kps
 
         def morph():
@@ -126,6 +125,7 @@ class RedBallPlaygroundDetector:
         def surf():
             # Works well for rasberry west:
             # image.py no color normalization
+            show(image.bgr, scale=True, text="RGB")
             Cr = image.get_ycrcb(np.uint8)[:,:,1]
             # Cr = image.get_bgr(np.uint8)[:,:,2]
             temp = Cr
@@ -135,13 +135,13 @@ class RedBallPlaygroundDetector:
             # temp = threshold_rel(Cr, 188/255) #, cv2.THRESH_TOZERO_INV)
             # show(temp, scale=True)
             # temp = cv2.blur(temp, (5,5))
-            show(temp, scale=True)
+            show(temp, scale=True, text="Cr")
             temp = power_threshold(temp/255.0, 5)
-            # show(temp, scale=True)
+            show(temp, scale=True, text="Compressed dynamic range")
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
             # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
-            show(temp, keypoints=kps, scale=True)
+            show(temp, keypoints=kps, scale=True, text="Detected points")
             return kps
 
         # kps = morph()
