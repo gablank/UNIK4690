@@ -44,25 +44,29 @@ def calc_ball_score(metadata, camera_playground_polygon, balls):
 
     if "ball_circles" in metadata:
         hand_detected = metadata["ball_circles"]
-        hand_detected_piglet = metadata["piglet"][0] # Only one piglet - metadata store list
-        # Adjust hand detected coordinates to playground image only coordinates
-        dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
-        hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
-        hand_detected_piglet = adjust_circle(hand_detected_piglet, dx, dy)
 
-        score, matches = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
+        dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
 
         piglet_score = 0
 
-        piglets = [c for c,team in balls if team == 0]
-        if len(piglets) > 0:
-            piglet = piglets[0]
-            piglet_score = 1 if utilities.distance(hand_detected_piglet[0], piglet) < hand_detected_piglet[1] else 0
+        if "piglet" in metadata:
+            hand_detected_piglet = metadata["piglet"][0] # Only one piglet - metadata store list
+            hand_detected_piglet = adjust_circle(hand_detected_piglet, dx, dy)
+
+            piglets = [c for c,team in balls if team == 0]
+            if len(piglets) > 0:
+                piglet = piglets[0]
+                piglet_score = 1 if utilities.distance(hand_detected_piglet[0], piglet) < hand_detected_piglet[1] else 0
+
+        # Adjust hand detected coordinates to playground image only coordinates
+        hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
+
+        score, matches = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
 
         logger.debug("Ball score  : % .2f %s %s", score, len(balls), len(matches))
         logger.debug("Piglet score: %d", piglet_score)
         return score, len(hand_detected), matches, piglet_score
-    return -1, 0, []
+    return -1, 0, [], 0
 
 
 class PetanqueDetection:
