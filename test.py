@@ -19,11 +19,7 @@ def cmask(center, radius, array):
 def minimize_sum_of_squared_gradients(img, expected_radius):
     center_x, center_y = int(len(img[0]) / 2), int(len(img) / 2)
 
-    to_show = img[:,:,0].copy()
-    cv2.circle(to_show, (center_x, center_y), expected_radius, (1, 1, 1))
-    utilities.show(to_show)
-
-    to_show = img.copy()
+    # to_show = img.copy()
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     min_sum = 0  # float("INF")
     best_param = None
@@ -43,9 +39,9 @@ def minimize_sum_of_squared_gradients(img, expected_radius):
 
     # print(min_sum, best_param)
 
-    cv2.circle(to_show, (int(best_param[1]), int(best_param[2])), int(best_param[0]), (1, 1, 1))
+    # cv2.circle(to_show, (int(best_param[1]), int(best_param[2])), int(best_param[0]), (1, 1, 1))
 
-    utilities.show(to_show)
+    # utilities.show(to_show)
 
     return min_sum, best_param[0], best_param[1]-center_x, best_param[2]-center_y
 
