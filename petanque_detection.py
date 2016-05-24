@@ -170,7 +170,15 @@ class PetanqueDetection:
             # Output: Balls and their ranks drawn onto and BGR image
             result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
 
-            utilities.show(result, self._win_name)
+            playground_superimposed, balls_ordered = result
+            winning_team = balls_ordered[0][1]
+            winning_points = 0
+            for _, team in balls_ordered:
+                if team != winning_team:
+                    break
+                winning_points += 1
+
+            utilities.show(playground_superimposed, self._win_name, text="Team {} is scored {} point{}.".format(winning_team, winning_points, "" if winning_points == 1 else "s"))
 
         return result_for_image
 
@@ -199,6 +207,8 @@ class PetanqueDetection:
                     pressed_idx = userdata["pressed_idx"]
 
                 bgr = bgr_orig.copy()
+                bgr *= 255
+                bgr = bgr.astype(np.uint8)
 
                 line_color = (0, 0, 255)
                 dot_color = (255, 0, 0)
@@ -331,6 +341,8 @@ class PetanqueDetection:
                     cur_mouse_pos = userdata["cur_mouse_pos"]
 
                 bgr = bgr_orig.copy()
+                bgr *= 255
+                bgr = bgr.astype(np.uint8)
 
                 # Pig color, team 1 color, team 2 color
                 ball_colors = [(200,0,0), (0,200,0), (0,0,200)]
@@ -338,7 +350,6 @@ class PetanqueDetection:
 
                 pressed = balls[pressed_idx] if pressed_idx is not None else None
                 mouseover = balls[mouseover_idx] if mouseover_idx is not None else None
-
 
                 for idx, ball in enumerate(balls):
                     ball_position = ball[0]
@@ -453,7 +464,6 @@ class PetanqueDetection:
                                    np.array(self.real_world_playground_polygon))[0]
 
         return w_H_i
-        utilities.show(cv2.warpPerspective(image.get_bgr(), w_H_i, (200,600)))
 
     def _get_playground_image(self, image, camera_playground_polygon, w_H_i):
         # Get the bounding rect so we can resize the image down to that size
@@ -555,16 +565,17 @@ class PetanqueDetection:
 
         miniature_pig_pos, miniature_pig_radius = real_world_to_miniature(pig_position, self.pig_radius)
 
-        cv2.circle(playground_above, miniature_pig_pos, miniature_pig_radius, (255, 255, 255), thickness=-1)
+        team_colors = [(255, 255, 255), (0, 255, 0), (0, 0, 255)]
+        cv2.circle(playground_above, miniature_pig_pos, miniature_pig_radius, team_colors[0], thickness=-1)
 
         for (ball_x, ball_y), team in balls_real_world:
             miniature_ball_pos, miniature_ball_radius = real_world_to_miniature((ball_x, ball_y), self.ball_radius)
-            cv2.circle(playground_above, miniature_ball_pos, miniature_ball_radius, (255, 255, 255), thickness=-1)
+            cv2.circle(playground_above, miniature_ball_pos, miniature_ball_radius, team_colors[team], thickness=-1)
 
         padding = 20
-        to_show[padding:padding+mini_playground_height, 1920-mini_playground_width-padding:1920-padding, :] = playground_above
+        to_show[padding:padding+mini_playground_height, 1920-mini_playground_width-padding:1920-padding, :] = playground_above[:, ::-1, :]
 
-        return to_show
+        return to_show, balls_real_world
 
 
 if __name__ == "__main__":
@@ -614,7 +625,7 @@ if __name__ == "__main__":
         # os.environ["DEBUG"] = "surf"
         # os.environ["DEBUG"] = "surf,pig"
         # os.environ["DEBUG"] = "pig"
-
+    filenames = ["2016-05-02_17:56:03.png"]
     try:
         for file in filenames:
             if not file.endswith(".png"):
