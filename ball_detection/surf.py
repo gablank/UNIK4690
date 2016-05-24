@@ -21,6 +21,8 @@ def to_int(nested_tuple):
     else:
         return int(nested_tuple)
 
+g_dbg_counter = 0
+
 class SurfBallDetector:
     def __init__(self, petanque_detection):
         self.petanque_detection = petanque_detection
@@ -129,6 +131,10 @@ class SurfBallDetector:
                     res.append(kp)
                 else:
                     logger.debug("kp (%.0f, %.0f) rejected error (rat) %.3f", kp.pt[0], kp.pt[1], radius_err / pg_radius)
+                    if False:
+                        global g_dbg_counter
+                        cv2.imwrite("debug/%d.png"%g_dbg_counter, utilities.extract_circle(img, (kp.pt, kp.size/2), 40))
+                        g_dbg_counter += 1
 
             return res
 

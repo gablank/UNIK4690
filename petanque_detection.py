@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+
 from playground_detection.red_balls import RedBallPlaygroundDetector
 from playground_detection.flood_fill import FloodFillPlaygroundDetector
 from ball_detection.minimize_gradients import MinimizeGradientsBallDetector
@@ -37,14 +38,30 @@ def adjust_points_to_playground_image(pts, camera_playground_polygon):
 
 
 def calc_ball_score(metadata, camera_playground_polygon, balls):
+    def adjust_circle(c, dx, dy):
+        (x,y), r = c
+        return ((x-dx, y-dy), r)
+
     if "ball_circles" in metadata:
         hand_detected = metadata["ball_circles"]
+        hand_detected_piglet = metadata["piglet"][0] # Only one piglet - metadata store list
         # Adjust hand detected coordinates to playground image only coordinates
         dx, dy, w, h = cv2.boundingRect(np.array(camera_playground_polygon))
         hand_detected = [((x-dx, y-dy), r) for (x,y),r in hand_detected]
+        hand_detected_piglet = adjust_circle(hand_detected_piglet, dx, dy)
+
         score, matches = utilities.ball_detection_score(hand_detected, [c for c,team in balls])
-        logger.debug("Ball score: % .2f %s %s", score, len(balls), len(matches))
-        return score, len(hand_detected), matches
+
+        piglet_score = 0
+
+        piglets = [c for c,team in balls if team == 0]
+        if len(piglets) > 0:
+            piglet = piglets[0]
+            piglet_score = 1 if utilities.distance(hand_detected_piglet[0], piglet) < hand_detected_piglet[1] else 0
+
+        logger.debug("Ball score  : % .2f %s %s", score, len(balls), len(matches))
+        logger.debug("Piglet score: %d", piglet_score)
+        return score, len(hand_detected), matches, piglet_score
     return -1, 0, []
 
 
@@ -108,7 +125,7 @@ class PetanqueDetection:
             camera_playground_polygon = self._user_adjust_playground(image, camera_playground_polygon)
 
         if playground_only:
-            self.statistics.append(result_for_image + [0,0,0])
+            self.statistics.append(result_for_image + [0,0,0,0])
             return self.statistics[-1]
 
         # Homography estimation
@@ -130,8 +147,8 @@ class PetanqueDetection:
         # the ball belongs to. Team 0 is reserved for the pig. Returns coordinates of the balls in the playground_image!
         balls = self.ball_detector.detect(playground_image, w_H_p, playground_polygon, playground_mask)
 
-        ball_score, actual_count, matches = calc_ball_score(metadata, camera_playground_polygon, balls)
-        result_for_image.extend([ball_score, len(balls), actual_count])
+        ball_score, actual_count, matches, piglet_score = calc_ball_score(metadata, camera_playground_polygon, balls)
+        result_for_image.extend([ball_score, len(balls), actual_count, piglet_score])
 
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
