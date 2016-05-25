@@ -120,7 +120,7 @@ class PetanqueDetection:
         if len(camera_playground_polygon) != 4:
             # Detection failed, create a dummy polygon for user to adjust
             # TODO: fix ordering
-            camera_playground_polygon = [(100,100), (200,100), (200,200), (100,200)]
+            camera_playground_polygon = [(100,700), (100,100), (300,100), (300,700)]
 
         # Playground detection adjustment
         # Input: Original image, polygon defining the playground as list of points
