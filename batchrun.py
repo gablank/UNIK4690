@@ -69,9 +69,9 @@ if __name__ == "__main__":
                 image = Image(file, histogram_equalization=None)
                 try:
                     result = petanque_detection.detect(image, interactive=False, playground_only=playground_only)
-                    _, pg_score, ball_score, ball_count, real_count, piglet_score = result
-                    logger.info("Result: pgs: % .2f, bs: %5.2f, bd: % d, piglet: %d",
-                                 pg_score, ball_count, real_count-ball_count, piglet_score)
+                    _, pg_score, ball_score, ball_count, real_count, piglet_score, offset_error_sum = result
+                    logger.info("Result: pgs: % .2f, bs: %5.2f, bd: % d, piglet: %d, offset_error: %.2f" ,
+                                 pg_score, ball_count, real_count-ball_count, piglet_score, offset_error_sum)
                     if pg_score < pg_thresh:
                         print("pg: %s" % file)
                     if ball_count != real_count:
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         failed_pg = iter_count(filter(lambda x: x[1] < pg_thresh, stats))
         failed_balls = iter_count(filter(lambda x: x[3] != x[4], stats))
         ball_delta_abs_sum = sum(map(lambda x: abs(x[4]-x[3]), stats))
-        failed_piglets = sum(map(lambda x: 1-x[-1], stats))
+        failed_piglets = sum(map(lambda x: 1-x[-2], stats))
         logger.info("Playground failed: %.2f", failed_pg/n)
         logger.info("Balls failed     : %.2f", failed_balls/n)
         logger.info("Ball error sum     : %d", ball_delta_abs_sum)

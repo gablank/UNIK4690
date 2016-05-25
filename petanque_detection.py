@@ -130,7 +130,7 @@ class PetanqueDetection:
         # print(camera_playground_polygon)
 
         if playground_only:
-            self.statistics.append(result_for_image + [0,0,0,0])
+            self.statistics.append(result_for_image + [0,0,0,0,0])
             return self.statistics[-1]
 
         # Homography estimation
@@ -153,7 +153,8 @@ class PetanqueDetection:
         balls = self.ball_detector.detect(playground_image, w_H_p, playground_polygon, playground_mask)
 
         ball_score, actual_count, matches, piglet_score = calc_ball_score(metadata, camera_playground_polygon, balls)
-        result_for_image.extend([ball_score, len(balls), actual_count, piglet_score])
+        error_abs_sum = sum([ utilities.distance(c,b) for (c,r), b in matches])
+        result_for_image.extend([ball_score, len(balls), actual_count, piglet_score, error_abs_sum])
 
         # Ball detection adjustment
         # Input: Original image, list of tuples of points where the balls are and the team they belong to
