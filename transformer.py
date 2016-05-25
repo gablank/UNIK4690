@@ -26,7 +26,7 @@ def mean_diff(grayscale, box=None):
     all_mean, all_std_dev = cv2.meanStdDev(grayscale)
     # print(abs(box_mean - all_mean), 70*box_std_dev**2)
     import math
-    alpha = 0.05
+    alpha = 0.01
     print(abs(box_mean - all_mean)[0][0]*alpha, (1-alpha)*box_std_dev[0][0]**2, 0*all_std_dev[0][0]**2)
     # return abs(box_mean - all_mean) - 70*box_std_dev**2# - 30*all_std_dev**2
     return alpha*abs(box_mean - all_mean)[0][0] - (1-alpha)**box_std_dev[0][0]**2 - 0*all_std_dev[0][0]**2
@@ -69,8 +69,8 @@ class Transformer:
         cur_best_fitness = self.playground_fitness_func(utilities.transform_image(image, cur_best_transform))
 
         # Perform a quick hill climber before returning
-        # optimization_method = "hill climber"
-        optimization_method = "gradient ascent"
+        optimization_method = "hill climber"
+        # optimization_method = "gradient ascent"
         # optimization_method = None
 
         if optimization_method == "hill climber":
@@ -102,15 +102,15 @@ class Transformer:
                         new_best = True
                         # break
 
-                transformed = utilities.transform_image(image, cur_best_transform)
-                utilities.show(transformed, time_ms=30, text=str(self.playground_fitness_func(transformed)))
+                #transformed = utilities.transform_image(image, cur_best_transform)
+                #utilities.show(transformed, time_ms=30, text=str(self.playground_fitness_func(transformed)))
 
                 if not new_best:
                     break
 
         elif optimization_method == "gradient ascent":
-            step_size = 50
-            max_iters = 1
+            step_size = 100
+            max_iters = 10
             h = 0.01
             for idx in range(max_iters):
                 highest = 0
@@ -140,6 +140,7 @@ class Transformer:
                     cur_best_transform[color_space] = coefficient + gradient[color_space] * step_size
 
                 print(self.playground_fitness_func(utilities.transform_image(image, cur_best_transform)))
+                utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
         # Update the previous best
         if self.playground_transformations[-1] != cur_best_transform:
             print("Updating transform: {} to {}".format(self.playground_transformations[-1], cur_best_transform))
