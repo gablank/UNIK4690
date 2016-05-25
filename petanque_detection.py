@@ -80,7 +80,7 @@ class PetanqueDetection:
         w = real world
     Real world distance units are milli-meters
     """
-    def __init__(self, playground_polygon=((0,6000),(0,0),(2000,0),(2000,6000)),
+    def __init__(self, playground_polygon=((0,6400),(0,0),(2110,0),(2110,6400)),
                  PlaygroundDetector=FloodFillPlaygroundDetector,
                  BallDetector=MinimizeGradientsBallDetector,
                  pig_radius=21.0,
@@ -179,6 +179,7 @@ class PetanqueDetection:
                     break
                 winning_points += 1
 
+            #cv2.imwrite("/home/anders/UNIK4690/project/report/end_result.png", playground_superimposed)
             utilities.show(playground_superimposed, self._win_name, text="Team {} is scored {} point{}.".format(winning_team, winning_points, "" if winning_points == 1 else "s"))
 
         return result_for_image
@@ -593,7 +594,7 @@ if __name__ == "__main__":
     from glob import glob
     filenames = []
 
-    use_camera = False
+    use_camera = True
 
     if len(sys.argv) > 1:
         filenames = sys.argv
@@ -601,10 +602,14 @@ if __name__ == "__main__":
     elif use_camera:
         import networkcamera
 
-        with networkcamera.NetworkCamera("http://31.45.53.135:1337/new_image.png") as cam:
+        #with networkcamera.NetworkCamera("http://31.45.53.135:1337/raspberry_image.png") as cam:
+        with networkcamera.NetworkCamera("http://192.168.2.101:1337/raspberry_image.png") as cam:
             while True:
                 frame = cam.capture()
-                image = Image(image_data=frame)
+                print(cam)
+                image = Image(image_data=frame, undistort=True, histogram_equalization=None)
+
+                #cv2.imwrite("/home/anders/UNIK4690/project/report/difficult_case_3.png", image.get_bgr(np.uint8))
 
                 petanque_detection.detect(image)
         exit(0)
@@ -626,7 +631,7 @@ if __name__ == "__main__":
         # os.environ["DEBUG"] = "surf"
         # os.environ["DEBUG"] = "surf,pig"
         # os.environ["DEBUG"] = "pig"
-    filenames = ["2016-05-02_17:56:03.png"]
+    #filenames = ["/home/anders/UNIK4690/project/images/microsoft_cam/24h/south/2016-04-13_12:58:03.png"]
     try:
         for file in filenames:
             if not file.endswith(".png"):
@@ -637,7 +642,7 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, histogram_equalization=None)
+                image = Image(file, histogram_equalization=None, undistort=True, flip=False)
             except FileNotFoundError:
                 continue
             except ValueError:

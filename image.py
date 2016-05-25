@@ -6,7 +6,7 @@ import os
 
 
 class Image:
-    def __init__(self, path=None, image_data=None, histogram_equalization="rg_chromaticity"):
+    def __init__(self, path=None, image_data=None, histogram_equalization="rg_chromaticity", undistort=False, flip=False):
         if (path is None and image_data is None) or (path is not None and image_data is not None):
             raise RuntimeError("One and only one of path and image_data may be not None!")
 
@@ -14,15 +14,25 @@ class Image:
         if path is not None:
             path = utilities.locate_file(path)
 
-            self.bgr = cv2.imread(path)
+            self.original_bgr = cv2.imread(path)
             self.filename = os.path.basename(path)
-            if self.bgr is None:
+            if self.original_bgr is None:
                 raise FileNotFoundError("Unable to load image from {}".format(path))
 
         self.path = path
 
         if image_data is not None:
-            self.bgr = image_data
+            self.original_bgr = image_data
+
+        if flip:
+            self.original_bgr = self.original_bgr[::-1, ::-1, :]
+
+        if undistort:
+            K = np.array([1890.3, 0, 938.2, 0, 1893.4, 474.5, 0, 0, 1]).reshape((3,3))
+            distCoeffs = np.array([-0.1178, 1.3599, -0.0084, -7.8687*10**-4])
+            self.original_bgr = cv2.undistort(self.original_bgr, K, distCoeffs)
+
+        self.bgr = self.original_bgr.copy()
 
         if histogram_equalization is not None:
             if histogram_equalization == "rg_chromaticity":
