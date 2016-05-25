@@ -199,8 +199,6 @@ class SurfBallDetector:
         kps = surf_detector(img)
         show(img, keypoints=kps, scale=True, text="Initial candidates")
 
-        kps = utilities.keypoint_filter_overlapping(kps)
-        show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = filter_by_edges(kps)
         show(img, keypoints=kps, scale=True, text="Edge crossing removed")
@@ -209,6 +207,10 @@ class SurfBallDetector:
         show(img, keypoints=kps, scale=True, text="Filtered by expected radius")
 
         kps = filter_pig_detected_as_playing_ball(kps, pig)
+        show(img, keypoints=kps, scale=True, text="Removed piglet posers")
+
+        kps = utilities.keypoint_filter_overlapping(kps)
+        show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = minimize_gradients(kps)
         show(img, keypoints=kps, scale=True, text="Gradient adjusted")
