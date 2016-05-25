@@ -69,10 +69,9 @@ def surf_detector(img, hess_thresh=3000):
     surf = cv2.xfeatures2d.SURF_create(hess_thresh, upright=True) #, nOctaves=10)
     kps = surf.detect(img)
 
+    show(img, keypoints=kps, scale=True, text="Initial keypoints")
     # print("%s keypoints" % len(kps))
     kps = keypoint_filter_overlapping(kps)
-    # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
-    # print("----------")
 
     return kps
 
@@ -97,6 +96,7 @@ class RedBallPlaygroundDetector:
             show(img, scale=True)
             img = apply_op(img, threshold_op(), debug=debug, params=params)
             kps = blob_detector(img, **params["blob"])
+            show(img, scale=True, keypoints=kps, text="Detected points")
             return kps
 
         def morph():
@@ -141,7 +141,7 @@ class RedBallPlaygroundDetector:
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
             # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
-            show(temp, keypoints=kps, scale=True, text="Detected points")
+            show(temp, keypoints=kps, scale=True, text="Final points")
             return kps
 
         # kps = morph()

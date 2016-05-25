@@ -21,7 +21,31 @@ def to_int(nested_tuple):
     else:
         return int(nested_tuple)
 
-g_dbg_counter = 0
+
+def cv_unwrap(wrapped_points):
+    """
+    cv2.convexHull and cv2.findContours wraps the points in extra lists for some reason.
+    """
+    as_list = []
+    for idx in range(len(wrapped_points)):
+        vertex = wrapped_points[idx][0]
+        as_list.append((vertex[0], vertex[1]))
+    return np.array(as_list)
+
+def circularity(ctr):
+    perim = cv2.arcLength(ctr, closed=True)
+    area = cv2.contourArea(ctr)
+    if perim == 0:
+        logger.debug("perimeter 0 in circularity calculation %s", ctr)
+        return 0
+    return (area*4*math.pi) / (perim*perim)
+
+def eccentricity(ctr):
+    ellipse = cv2.fitEllipse(ctr)
+    (x,y),(w,h),alpha = ellipse
+    return max(h,w)/min(h,w)
+
+g_fbr_debug_counter = 0
 
 class SurfBallDetector:
     def __init__(self, petanque_detection):
@@ -34,8 +58,6 @@ class SurfBallDetector:
 
         def minimize_gradients(kps):
             from test import minimize_sum_of_squared_gradients
-
-            # ball_matches = []
 
             optimized_kps = []
             tot = 0
@@ -63,42 +85,19 @@ class SurfBallDetector:
             return optimized_kps
 
 
-        def cv_unwrap(wrapped_points):
-            """
-            cv2.convexHull and cv2.findContours wraps the points in extra lists for some reason.
-            """
-            as_list = []
-            for idx in range(len(wrapped_points)):
-                vertex = wrapped_points[idx][0]
-                as_list.append((vertex[0], vertex[1]))
-            return np.array(as_list)
-
-        def circularity(ctr):
-            perim = cv2.arcLength(ctr, closed=True)
-            area = cv2.contourArea(ctr)
-            return (area*4*math.pi) / (perim*perim)
-
-        def eccentricity(ctr):
-            ellipse = cv2.fitEllipse(ctr)
-            (x,y),(w,h),alpha = ellipse
-            return max(h,w)/min(h,w)
-
         def detect_pig():
-            """
-            Quick and dirty pig detection
-            """
-            debug_pig = "pig" in debug_spec
+            """ Quick and dirty pig detection """
+
             from pipeline_visualizer import pig_pipeline, run_pipeline
+
+            debug_pig = "pig" in debug_spec
+
             img = as_uint8(playground_image.bgr)
-            # show(img)
             img = run_pipeline(img, pig_pipeline, debug=debug_pig)
-            # show(img)
-            _1, ctrs, _2 = cv2.findContours(img, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_NONE)
 
-            foo = playground_image.bgr.copy()
-            cv2.drawContours(foo, ctrs, -1, (0,0,255))
+            _1, cv_ctrs, _2 = cv2.findContours(img, mode=cv2.RETR_LIST, method=cv2.CHAIN_APPROX_NONE)
 
-            ctrs = [cv_unwrap(ctr) for ctr in ctrs]
+            ctrs = [cv_unwrap(ctr) for ctr in cv_ctrs]
 
             # print(list(map(lambda ctr: eccentricity(ctr), ctrs)))
             # print(list(map(lambda ctr: circularity(ctr), ctrs)))
@@ -108,11 +107,13 @@ class SurfBallDetector:
             circles = [cv2.minEnclosingCircle(ctr) for ctr in ctrs]
 
             if debug_pig:
+                pig_debug_img = playground_image.bgr.copy()
+                cv2.drawContours(pig_debug_img, cv_ctrs, -1, (0,0,255))
                 for c in circles:
                     pt,r = to_int(c)
-                    cv2.circle(foo, pt, r, (0,255,0))
-                    cv2.circle(foo, pt, calc_pig_radius(pt), (255,0,0))
-                show(foo)
+                    cv2.circle(pig_debug_img, pt, r, (0,255,0))
+                    cv2.circle(pig_debug_img, pt, calc_pig_radius(pt), (255,0,0))
+                show(pig_debug_img)
 
             if len(circles) == 0:
                 return None
@@ -142,9 +143,9 @@ class SurfBallDetector:
                 else:
                     logger.debug("kp (%.0f, %.0f) rejected error (rat) %.3f", kp.pt[0], kp.pt[1], radius_err / pg_radius)
                     if False:
-                        global g_dbg_counter
-                        cv2.imwrite("debug/%d.png"%g_dbg_counter, utilities.extract_circle(img, (kp.pt, kp.size/2), 40))
-                        g_dbg_counter += 1
+                        global g_fbr_debug_counter
+                        cv2.imwrite("debug/%d.png"%g_fbr_debug_counter, utilities.extract_circle(img, (kp.pt, kp.size/2), 40))
+                        g_fbr_debug_counter += 1
 
             return res
 
@@ -153,7 +154,7 @@ class SurfBallDetector:
             Discards any keypoints intersecting the playground edges.
             (All keypoint-centers are assumed to be within the playground)
             """
-            lines = list(zip(playground_polygon, playground_polygon[1:]+playground_polygon[:0]))
+            lines = list(zip(playground_polygon, playground_polygon[1:]+playground_polygon[:1]))
             res = []
             for kp in kps:
                 min_dist_to_edge = min([utilities.distance_point_to_bounded_line(pt1, pt2, kp.pt) for (pt1, pt2) in lines])
@@ -171,14 +172,15 @@ class SurfBallDetector:
             for kp in kps:
                 pig_r = pig[1]
                 d = utilities.distance(kp.pt, pig[0])
+                # Reject kps that overlap with the pig
+                # A bit conservative? Maybe only reject kp if its center is within the pig radius?
                 if kp.size/2+pig_r < d:
                     res.append(kp)
 
             return res
 
-
         img = transform_image(playground_image, ball_transformation_params)
-        img = as_uint8(img)
+        img = as_uint8(img) # SURF only works with uint8 images
 
         pig = detect_pig()
         if pig is None:
@@ -195,13 +197,8 @@ class SurfBallDetector:
             return kps
 
         kps = surf_detector(img)
-       
         show(img, keypoints=kps, scale=True, text="Initial candidates")
 
-        # n = len(kps)
-        kps = utilities.keypoint_filter_overlapping(kps)
-        # print("filtered %s" % (n-len(kps)))
-        show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = filter_by_edges(kps)
         show(img, keypoints=kps, scale=True, text="Edge crossing removed")
@@ -210,17 +207,13 @@ class SurfBallDetector:
         show(img, keypoints=kps, scale=True, text="Filtered by expected radius")
 
         kps = filter_pig_detected_as_playing_ball(kps, pig)
+        show(img, keypoints=kps, scale=True, text="Removed piglet posers")
+
+        kps = utilities.keypoint_filter_overlapping(kps)
+        show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = minimize_gradients(kps)
-
-        # n = len(kps)
-        # kps = filter_by_radius(kps)
-        # print(kps)
-        # show(img, keypoints=kps, scale=True)
-        # print("filtered %s" % (n-len(kps)))
-
-
-        # points = [(int(kp.pt[0]), int(kp.pt[1])) for kp in kps]
+        show(img, keypoints=kps, scale=True, text="Gradient adjusted")
 
 
         if kps is not None:
