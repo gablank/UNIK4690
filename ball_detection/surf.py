@@ -35,6 +35,9 @@ def cv_unwrap(wrapped_points):
 def circularity(ctr):
     perim = cv2.arcLength(ctr, closed=True)
     area = cv2.contourArea(ctr)
+    if perim == 0:
+        logger.debug("perimeter 0 in circularity calculation %s", ctr)
+        return 0
     return (area*4*math.pi) / (perim*perim)
 
 def eccentricity(ctr):
@@ -169,11 +172,12 @@ class SurfBallDetector:
             for kp in kps:
                 pig_r = pig[1]
                 d = utilities.distance(kp.pt, pig[0])
+                # Reject kps that overlap with the pig
+                # A bit conservative? Maybe only reject kp if its center is within the pig radius?
                 if kp.size/2+pig_r < d:
                     res.append(kp)
 
             return res
-
 
         img = transform_image(playground_image, ball_transformation_params)
         img = as_uint8(img) # SURF only works with uint8 images
@@ -193,11 +197,9 @@ class SurfBallDetector:
             return kps
 
         kps = surf_detector(img)
-       
         show(img, keypoints=kps, scale=True, text="Initial candidates")
 
         kps = utilities.keypoint_filter_overlapping(kps)
-
         show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = filter_by_edges(kps)
@@ -209,7 +211,6 @@ class SurfBallDetector:
         kps = filter_pig_detected_as_playing_ball(kps, pig)
 
         kps = minimize_gradients(kps)
-
         show(img, keypoints=kps, scale=True, text="Gradient adjusted")
 
 
