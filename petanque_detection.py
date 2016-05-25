@@ -172,12 +172,15 @@ class PetanqueDetection:
             result = self._draw_distance_to_pig(image, balls, w_H_i, w_H_p)
 
             playground_superimposed, balls_ordered = result
-            winning_team = balls_ordered[0][1]
+            winning_team = "None"
             winning_points = 0
-            for _, team in balls_ordered:
-                if team != winning_team:
-                    break
-                winning_points += 1
+            if len(balls_ordered) > 0:
+                winning_team = balls_ordered[0][1]
+                winning_points = 0
+                for _, team in balls_ordered:
+                    if team != winning_team:
+                        break
+                    winning_points += 1
 
             #cv2.imwrite("/home/anders/UNIK4690/project/report/end_result.png", playground_superimposed)
             utilities.show(playground_superimposed, self._win_name, text="Team {} is scored {} point{}.".format(winning_team, winning_points, "" if winning_points == 1 else "s"))
