@@ -216,7 +216,7 @@ class SurfBallDetector:
         show(img, keypoints=kps, scale=True, text="Gradient adjusted")
 
 
-        if kps is not None:
+        if kps is not None and len(kps) > 0:
             bgr = playground_image.get_bgr()
             ball_averages = []
             for kp in kps:
