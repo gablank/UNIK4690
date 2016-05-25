@@ -19,10 +19,13 @@ def cmask(center, radius, array):
 def minimize_sum_of_squared_gradients(img, expected_radius):
     center_x, center_y = int(len(img[0]) / 2), int(len(img) / 2)
 
-    # to_show = img.copy()
+    # to_show = np.zeros((img.shape[0], 2*img.shape[1], 3))
+    # img_copy = img.copy()
+    # to_show[:,:img.shape[1]] = img.copy()
+    # cv2.circle(to_show, (int(center_x), int(center_y)), int(expected_radius), (1, 1, 1))
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     min_sum = 0  # float("INF")
-    best_param = None
+    best_param = (expected_radius, cur_x, cur_y)
 
     img_avg = np.average(img)
 
@@ -39,8 +42,12 @@ def minimize_sum_of_squared_gradients(img, expected_radius):
 
     # print(min_sum, best_param)
 
-    # cv2.circle(to_show, (int(best_param[1]), int(best_param[2])), int(best_param[0]), (1, 1, 1))
-
+    # cv2.circle(img_copy, (int(best_param[1]), int(best_param[2])), int(best_param[0]), (1, 1, 1))
+    # to_show[:,img.shape[1]:,:] = img_copy.copy()
+    # to_show[:,img.shape[1]:img.shape[1]+1,:] = (0,0,0)
+    #
+    # import time
+    # cv2.imwrite("/home/anders/UNIK4690/project/report/ball_detection_pipeline/{}.png".format(time.time()), (to_show*255).astype(np.uint8))
     # utilities.show(to_show)
 
     return min_sum, best_param[0], best_param[1]-center_x, best_param[2]-center_y
