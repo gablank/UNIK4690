@@ -26,9 +26,10 @@ def mean_diff(grayscale, box=None):
     all_mean, all_std_dev = cv2.meanStdDev(grayscale)
     # print(abs(box_mean - all_mean), 70*box_std_dev**2)
     import math
-    print(abs(box_mean - all_mean)[0][0], 70*box_std_dev[0][0]**2, 0*all_std_dev[0][0]**2)
+    alpha = 0.05
+    print(abs(box_mean - all_mean)[0][0]*alpha, (1-alpha)*box_std_dev[0][0]**2, 0*all_std_dev[0][0]**2)
     # return abs(box_mean - all_mean) - 70*box_std_dev**2# - 30*all_std_dev**2
-    return abs(box_mean - all_mean)[0][0] - 70*box_std_dev[0][0]**2 - 0*all_std_dev[0][0]**2
+    return alpha*abs(box_mean - all_mean)[0][0] - (1-alpha)**box_std_dev[0][0]**2 - 0*all_std_dev[0][0]**2
 
 
 def ball_fitness_func(grayscale):
@@ -41,6 +42,7 @@ class Transformer:
         self.playground_fitness_func = mean_diff
 
         if filename is not None:
+            print("Loading")
             with open(filename, "r") as f:
                 json_object = json.load(f)
                 self.playground_transformations = json_object["playground_transformations"]
@@ -67,70 +69,77 @@ class Transformer:
         cur_best_fitness = self.playground_fitness_func(utilities.transform_image(image, cur_best_transform))
 
         # Perform a quick hill climber before returning
-        step_size = 0.3
-        max_iters = 1
-        for idx in range(max_iters):
-            # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
-            new_best = False
-            for color_space, coefficient in cur_best_transform.items():
-                c1 = cur_best_transform.copy()
-                c2 = cur_best_transform.copy()
+        # optimization_method = "hill climber"
+        optimization_method = "gradient ascent"
+        # optimization_method = None
 
-                # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
-                c1[color_space] += max(0.05, step_size * c1[color_space])
-                c2[color_space] -= max(0.05, step_size * c2[color_space])
+        if optimization_method == "hill climber":
+            step_size = 0.3
+            max_iters = 1000
+            for idx in range(max_iters):
+                # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
+                new_best = False
+                for color_space, coefficient in cur_best_transform.items():
+                    c1 = cur_best_transform.copy()
+                    c2 = cur_best_transform.copy()
 
-                c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
-                c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
+                    # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
+                    c1[color_space] += max(0.05, step_size * c1[color_space])
+                    c2[color_space] -= max(0.05, step_size * c2[color_space])
 
-                if c1_fitness > cur_best_fitness:
-                    cur_best_transform = c1
-                    cur_best_fitness = c1_fitness
-                    new_best = True
-                    # break
+                    c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
+                    c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
 
-                if c2_fitness > cur_best_fitness:
-                    cur_best_transform = c2
-                    cur_best_fitness = c2_fitness
-                    new_best = True
-                    # break
+                    if c1_fitness > cur_best_fitness:
+                        cur_best_transform = c1
+                        cur_best_fitness = c1_fitness
+                        new_best = True
+                        # break
 
-            print(cur_best_transform)
+                    if c2_fitness > cur_best_fitness:
+                        cur_best_transform = c2
+                        cur_best_fitness = c2_fitness
+                        new_best = True
+                        # break
 
-            if not new_best:
-                break
-        # step_size = 0.1
-        # max_iters = 1
-        # h = 0.01
-        # for idx in range(max_iters):
-        #
-        #     highest = 0
-        #     for key, coefficient in cur_best_transform.items():
-        #         highest = max(highest, abs(coefficient))
-        #
-        #     for key in cur_best_transform:
-        #         cur_best_transform[key] /= highest
-        #
-        #     gradient = {}
-        #     # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
-        #     new_best = False
-        #     for color_space, coefficient in cur_best_transform.items():
-        #         c1 = copy.deepcopy(cur_best_transform)
-        #         c2 = copy.deepcopy(cur_best_transform)
-        #
-        #         # If c1[i] is 0.0 we won't ever change the value unless we add a minimum value like here
-        #         c1[color_space] += h/2
-        #         c2[color_space] -= h/2
-        #
-        #         c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
-        #         c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
-        #
-        #         gradient[color_space] = (c1_fitness - c2_fitness) / h
-        #
-        #     print(gradient)
-        #     for color_space, coefficient in cur_best_transform.items():
-        #         cur_best_transform[color_space] = coefficient + gradient[color_space] * step_size
+                transformed = utilities.transform_image(image, cur_best_transform)
+                utilities.show(transformed, time_ms=30, text=str(self.playground_fitness_func(transformed)))
 
+                if not new_best:
+                    break
+
+        elif optimization_method == "gradient ascent":
+            step_size = 50
+            max_iters = 1
+            h = 0.01
+            for idx in range(max_iters):
+                highest = 0
+                for key, coefficient in cur_best_transform.items():
+                    highest = max(highest, abs(coefficient))
+
+                for key in cur_best_transform:
+                    cur_best_transform[key] /= highest
+
+                gradient = {}
+                # utilities.show(utilities.transform_image(image, cur_best_transform), time_ms=30)
+                new_best = False
+                for color_space, coefficient in cur_best_transform.items():
+                    c1 = copy.deepcopy(cur_best_transform)
+                    c2 = copy.deepcopy(cur_best_transform)
+
+                    c1[color_space] += h/2
+                    c2[color_space] -= h/2
+
+                    c1_fitness = self.playground_fitness_func(utilities.transform_image(image, c1))
+                    c2_fitness = self.playground_fitness_func(utilities.transform_image(image, c2))
+
+                    gradient[color_space] = (c1_fitness - c2_fitness) / h
+
+                # print(gradient)
+                for color_space, coefficient in cur_best_transform.items():
+                    cur_best_transform[color_space] = coefficient + gradient[color_space] * step_size
+
+                print(self.playground_fitness_func(utilities.transform_image(image, cur_best_transform)))
         # Update the previous best
         if self.playground_transformations[-1] != cur_best_transform:
             print("Updating transform: {} to {}".format(self.playground_transformations[-1], cur_best_transform))
@@ -165,20 +174,46 @@ if __name__ == "__main__":
     # utilities.show(transform)
     # exit(0)
 
+    import networkcamera
     transformer = Transformer(filename="playground_transformer_state.json")
+    #
+    # t1 = Transformer()
+    # t2 = Transformer()
+    # t3 = Transformer()
+    # t4 = Transformer()
+    #
+    # image = Image("/home/anders/UNIK4690/project/images/raspberry/south/2016-05-02_11:51:21.png")
+    #
+    # t1.get_playground_transformation(image)
+    # t2.get_playground_transformation(image)
+    # t3.get_playground_transformation(image)
+    # t4.get_playground_transformation(image)
+    #
+    # exit(0)
 
 #{"ball_transformations": null, "playground_transformations": [{"lab_a": -0.3835904764611054, "ycrcb_y": 0.18121514971491337, "ycrcb_cn": -0.010627159328814776, "bgr_r": -0.7900661518043041, "bgr_b": 0.11399199903420945, "ycrcb_cr": -0.6889582901043134, "hsv_h": 0.9119966281808028, "hsv_v": -1.0, "bgr_g": 0.6797306701997627, "hsv_s": -0.24043657910513946, "lab_b": -0.28036275430352386, "lab_l": -0.16593829211255623}]}
-    image = Image("images/test.png")
-    try:
-        while True:
-            best_transform = transformer.get_playground_transformation(image)
-            utilities.show(best_transform, time_ms=30)
-    except Exception as e:
-        import traceback
-        print(e)
-        traceback.print_tb(e.__traceback__)
-        transformer.save(filename="playground_transformer_state.json")
-    exit(0)
+    # with networkcamera.NetworkCamera("http://31.45.53.135:1337/raspberry_image.png") as cam:
+    #     cam.set_resolution(1920, 1080)
+    #     image = Image(image_data=cam.capture())
+    #
+    # cv2.imwrite("images/raspberry_1.png", image.get_bgr(np.uint8))
+    #
+    # #image = Image("images/raspberry_1.png")
+    #
+    # utilities.show_all(image)
+    #
+    # try:
+    #     idx = 0
+    #     while True:
+    #         best_transform = transformer.get_playground_transformation(image)
+    #         utilities.show(best_transform, text=str(idx), time_ms=30)
+    #         idx += 1
+    # except Exception as e:
+    #     import traceback
+    #     print(e)
+    #     traceback.print_tb(e.__traceback__)
+    #     transformer.save(filename="playground_transformer_state.json")
+    # exit(0)
     #
     # import networkcamera, camera
     #
@@ -194,7 +229,7 @@ if __name__ == "__main__":
     try:
         import os
         filenames = []
-        for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/microsoft_cam/24h/south/")):
+        for cur in os.walk(os.path.join(utilities.get_project_directory(), "images/raspberry/south/")):
             filenames = cur[2]
             break
 
@@ -207,7 +242,8 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 if date < datetime.datetime(2016, 4, 12, 19, 0):
                     continue
-                image = Image(os.path.join("images/microsoft_cam/24h/south/", file))
+                image = Image(os.path.join("images/raspberry/south/", file))
+                utilities.show_all(image)
                 # color_spaces = image.get_color_space_dict()
                 #
                 # def my_fitness(transform, box=None):
@@ -230,6 +266,7 @@ if __name__ == "__main__":
 
             except FileNotFoundError:
                 continue
+
             best_transform = transformer.get_playground_transformation(image)
 
             utilities.show(best_transform, time_ms=30, text=image.filename)
