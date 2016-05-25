@@ -24,10 +24,10 @@ def minimize_sum_of_squared_gradients(img, expected_radius):
     # to_show[:,:img.shape[1]] = img.copy()
     # cv2.circle(to_show, (int(center_x), int(center_y)), int(expected_radius), (1, 1, 1))
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    min_sum = 0  # float("INF")
-    best_param = (expected_radius, cur_x, cur_y)
-
     img_avg = np.average(img)
+
+    min_sum = np.sum(np.power(img[center_y-expected_radius:center_y+expected_radius, center_x-expected_radius:center_x+expected_radius]-img_avg, 2))
+    best_param = (expected_radius, center_x, center_y)
 
     for d_x in range(-expected_radius, expected_radius):
         cur_x = center_x + d_x
