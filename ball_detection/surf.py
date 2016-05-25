@@ -137,15 +137,17 @@ class SurfBallDetector:
             for kp in kps:
                 kp_radius = kp.size / 2
                 pg_radius = calc_playing_ball_radius(kp.pt)
-                radius_err = abs(pg_radius - kp_radius)
-                if radius_err / pg_radius < 0.60:
+                if kp_radius >= pg_radius:
                     res.append(kp)
-                else:
-                    logger.debug("kp (%.0f, %.0f) rejected error (rat) %.3f", kp.pt[0], kp.pt[1], radius_err / pg_radius)
-                    if False:
-                        global g_fbr_debug_counter
-                        cv2.imwrite("debug/%d.png"%g_fbr_debug_counter, utilities.extract_circle(img, (kp.pt, kp.size/2), 40))
-                        g_fbr_debug_counter += 1
+                # radius_err = abs(pg_radius - kp_radius)
+                # if radius_err / pg_radius < 0.60:
+                #     res.append(kp)
+                # else:
+                #     logger.debug("kp (%.0f, %.0f) rejected error (rat) %.3f", kp.pt[0], kp.pt[1], radius_err / pg_radius)
+                #     if False:
+                #         global g_fbr_debug_counter
+                #         cv2.imwrite("debug/%d.png"%g_fbr_debug_counter, utilities.extract_circle(img, (kp.pt, kp.size/2), 40))
+                #         g_fbr_debug_counter += 1
 
             return res
 
