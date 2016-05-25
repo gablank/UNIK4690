@@ -175,7 +175,7 @@ class RedBallPlaygroundDetector:
         # First we find a ordering such that the resulting polygon has no crossing lines
         # .. and oriented correct.
         
-        convex_hull = cv2.convexHull(np.array(points), clockwise=True)
+        convex_hull = cv2.convexHull(np.array(points), clockwise=False)
 
         def cv_convex_hull_to_list(convex_hull):
             """
