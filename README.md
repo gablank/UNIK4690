@@ -23,7 +23,7 @@
       playground_detection/maximize_density.py
         
     Ball detection methods:
-      ball_detection/surf.py
+      ball_detection/surf.py (main ball detection)
       ball_detection/hough.py (early attempt)
       ball_detection/minimize_gradients.py (early attempt)
       
