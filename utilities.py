@@ -38,7 +38,7 @@ def draw_label(to_show, text):
 
 global_shown_history = []
 global_show_i = 0
-def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=False, keep=True):
+def show(img, win_name="test", fullscreen=False, time_ms=0, text=None, draw_histograms=False, keypoints=None, scale=True, keep=True):
     """
     Show img in a window
     """
