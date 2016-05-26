@@ -72,16 +72,16 @@ class SurfBallDetector:
                 y_to = min(playground_image.get_bgr().shape[0], kp_y + search_radius)
                 x_from = max(0, kp_x - search_radius)
                 x_to = min(playground_image.get_bgr().shape[1], kp_x + search_radius)
-                print(y_from, y_to, x_from, x_to, expected_ball_radius)
+                # print(y_from, y_to, x_from, x_to, expected_ball_radius)
 
                 possible_ball = playground_image.bgr[y_from:y_to, x_from:x_to]
 
                 score, radius, dx, dy = minimize_sum_of_squared_gradients(possible_ball, expected_ball_radius)
-                optimized_kps.append(cv2.KeyPoint(kp_x+dx, kp_y+dy, radius, score))
+                optimized_kps.append(cv2.KeyPoint(kp_x+dx, kp_y+dy, radius*2, score))
                 # ball_matches.append((score, radius, kp_x+dx, kp_y+dy, kp_x, kp_y))
                 tot += score
 
-            show(img, keypoints=optimized_kps, scale=True, text="Minimized gradient optimized")
+            # show(img, keypoints=optimized_kps, scale=True, text="Minimized gradient optimized")
             return optimized_kps
 
 
@@ -215,7 +215,7 @@ class SurfBallDetector:
         show(img, keypoints=kps, scale=True, text="Overlaps removed")
 
         kps = minimize_gradients(kps)
-        show(img, keypoints=kps, scale=True, text="Gradient adjusted")
+        show(img, keypoints=kps, scale=True, text="Maximize mean-diff adjusted")
 
 
         if kps is not None and len(kps) > 0:
