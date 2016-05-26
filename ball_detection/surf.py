@@ -137,7 +137,7 @@ class SurfBallDetector:
             for kp in kps:
                 kp_radius = kp.size / 2
                 pg_radius = calc_playing_ball_radius(kp.pt)
-                if kp_radius >= pg_radius:
+                if kp_radius >= pg_radius*0.7:
                     res.append(kp)
                 # radius_err = abs(pg_radius - kp_radius)
                 # if radius_err / pg_radius < 0.60:
