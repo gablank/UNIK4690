@@ -465,7 +465,7 @@ phase_pipeline = [
     # threshold_op(cv2.THRESH_BINARY_INV),
 ]
 
-def apply_op(img, op, debug=False, params={}):
+def apply_op(img, op, debug=False, params={}, nr=0):
     if op.name in params:
         p = params[op.name]
     else:
@@ -476,12 +476,12 @@ def apply_op(img, op, debug=False, params={}):
     else:
         img = op.op(img)
     if debug:
-        utilities.show(img, text=op.name, scale=True)
+        utilities.show(img, text=("%d: "%nr)+op.name, scale=True)
     return img
     
 def run_pipeline(img, pipeline, debug=False):
     for i, op in enumerate(pipeline):
-        img = apply_op(img, op, debug)
+        img = apply_op(img, op, debug, nr=i+1)
 
     return img
 

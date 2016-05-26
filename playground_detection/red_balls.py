@@ -69,7 +69,7 @@ def surf_detector(img, hess_thresh=3000):
     surf = cv2.xfeatures2d.SURF_create(hess_thresh, upright=True) #, nOctaves=10)
     kps = surf.detect(img)
 
-    show(img, keypoints=kps, scale=True, text="Initial keypoints")
+    show(img, keypoints=kps, scale=True, text="4: Initial keypoints")
     # print("%s keypoints" % len(kps))
     kps = keypoint_filter_overlapping(kps)
 
@@ -125,7 +125,7 @@ class RedBallPlaygroundDetector:
         def surf():
             # Works well for rasberry west:
             # image.py no color normalization
-            show(image.bgr, scale=True, text="RGB")
+            show(image.bgr, scale=True, text="1: RGB")
             Cr = image.get_ycrcb(np.uint8)[:,:,1]
             # Cr = image.get_bgr(np.uint8)[:,:,2]
             temp = Cr
@@ -135,13 +135,13 @@ class RedBallPlaygroundDetector:
             # temp = threshold_rel(Cr, 188/255) #, cv2.THRESH_TOZERO_INV)
             # show(temp, scale=True)
             # temp = cv2.blur(temp, (5,5))
-            show(temp, scale=True, text="Cr")
+            show(temp, scale=True, text="2: Cr")
             temp = power_threshold(temp/255.0, 5)
-            show(temp, scale=True, text="Compressed dynamic range")
+            show(temp, scale=True, text="3: Compressed dynamic range")
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
             # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
-            show(temp, keypoints=kps, scale=True, text="Final points")
+            show(temp, keypoints=kps, scale=True, text="5: Final points (overlaps removed)")
             return kps
 
         # kps = morph()

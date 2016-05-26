@@ -113,7 +113,7 @@ class SurfBallDetector:
                     pt,r = to_int(c)
                     cv2.circle(pig_debug_img, pt, r, (0,255,0))
                     cv2.circle(pig_debug_img, pt, calc_pig_radius(pt), (255,0,0))
-                utilities.show(pig_debug_img, text="Contours, circularity, expected-radius")
+                utilities.show(pig_debug_img, text="5: Contours, circularity, expected-radius")
 
             if len(circles) == 0:
                 return None
@@ -199,23 +199,23 @@ class SurfBallDetector:
             return kps
 
         kps = surf_detector(img)
-        show(img, keypoints=kps, scale=True, text="Initial candidates")
+        show(img, keypoints=kps, scale=True, text="1: Initial candidates")
 
 
         kps = filter_by_edges(kps)
-        show(img, keypoints=kps, scale=True, text="Edge crossing removed")
+        show(img, keypoints=kps, scale=True, text="2: Edge crossing removed")
 
         kps = filter_by_radius(kps)
-        show(img, keypoints=kps, scale=True, text="Filtered by expected radius")
+        show(img, keypoints=kps, scale=True, text="3: Filtered by expected radius")
 
         kps = filter_pig_detected_as_playing_ball(kps, pig)
-        show(img, keypoints=kps, scale=True, text="Removed piglet posers")
+        show(img, keypoints=kps, scale=True, text="4: Removed piglet posers")
 
         kps = utilities.keypoint_filter_overlapping(kps)
-        show(img, keypoints=kps, scale=True, text="Overlaps removed")
+        show(img, keypoints=kps, scale=True, text="5: Overlaps removed")
 
         kps = minimize_gradients(kps)
-        show(img, keypoints=kps, scale=True, text="Maximize mean-diff adjusted")
+        show(img, keypoints=kps, scale=True, text="6: Maximize mean-diff adjusted")
 
 
         if kps is not None and len(kps) > 0:
