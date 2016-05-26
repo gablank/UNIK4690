@@ -2,13 +2,13 @@
 
 ## Index
 
-	Main program:
+	Main program: (ties all the pieces together, interactive interface)
       petanque_detection.py
     
     Run non-interactively and present detection statistics:
       batchrun.py
     
-    Tool for manually label images with ball and playground positions:
+    Tool for manually label images with ball and playground positions: (used for detection evaluation)
       set_metadata.py
     
     Various utilities:
@@ -21,15 +21,14 @@
       playground_detection/red_balls.py
       playground_detection/manual_playground_detector.py (dummy to be able to work with ball detection only)
       playground_detection/maximize_density.py
-      playground_detection/playground_detection_base.py
         
     Ball detection methods:
-      ball_detection/hough.py
-      ball_detection/minimize_gradients.py
       ball_detection/surf.py
+      ball_detection/hough.py (early attempt)
+      ball_detection/minimize_gradients.py (early attempt)
       
     
-    Camera interfaces/image acquisition:
+    Camera interfaces and image acquisition:
       camera.py
       lifecamstudiocamera.py
       networkcamera.py
