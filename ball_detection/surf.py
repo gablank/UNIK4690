@@ -113,7 +113,7 @@ class SurfBallDetector:
                     pt,r = to_int(c)
                     cv2.circle(pig_debug_img, pt, r, (0,255,0))
                     cv2.circle(pig_debug_img, pt, calc_pig_radius(pt), (255,0,0))
-                show(pig_debug_img, text="Contours, circularity, expected-radius")
+                utilities.show(pig_debug_img, text="Contours, circularity, expected-radius")
 
             if len(circles) == 0:
                 return None
