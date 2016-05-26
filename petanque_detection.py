@@ -94,7 +94,7 @@ class PetanqueDetection:
 
         self._mouse_position = None
         self._win_name = "Petanque detector"
-        self._window = cv2.namedWindow(self._win_name)
+        self._window = cv2.namedWindow(self._win_name, flags=cv2.WINDOW_NORMAL|cv2.WINDOW_KEEPRATIO)
         # Results per image:
         # List of [<filename>, <playground_score>, <ball_score>, <#detected_balls>, <#real_balls>]
         self.statistics = []
