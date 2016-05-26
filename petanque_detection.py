@@ -183,7 +183,7 @@ class PetanqueDetection:
                     winning_points += 1
 
             #cv2.imwrite("/home/anders/UNIK4690/project/report/end_result.png", playground_superimposed)
-            utilities.show(playground_superimposed, self._win_name, text="Team {} is scored {} point{}.".format(winning_team, winning_points, "" if winning_points == 1 else "s"))
+            utilities.show(playground_superimposed, self._win_name, text="Team {} scored {} point{}.".format(winning_team, winning_points, "" if winning_points == 1 else "s"))
 
         return result_for_image
 
