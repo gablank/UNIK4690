@@ -66,7 +66,8 @@ if __name__ == "__main__":
                 # if date < datetime.datetime(2016, 4, 13, 7, 5):
                 # if date < datetime.datetime(2016, 4, 12, 19, 0):
                 #     continue
-                image = Image(file, histogram_equalization=None)
+                image = Image(file, histogram_equalization=None, undistort=True, flip=False)
+                # image = Image(file, histogram_equalization=None)
                 try:
                     result = petanque_detection.detect(image, interactive=False, playground_only=playground_only)
                     _, pg_score, ball_score, ball_count, real_count, piglet_score, offset_error_sum = result
@@ -93,15 +94,18 @@ if __name__ == "__main__":
 
         stats = petanque_detection.statistics
         n = len(stats)
+        # img, pg, bs, b, ab, p, delta sum 
         failed_pg = iter_count(filter(lambda x: x[1] < pg_thresh, stats))
         failed_balls = iter_count(filter(lambda x: x[3] != x[4], stats))
         ball_delta_abs_sum = sum(map(lambda x: abs(x[4]-x[3]), stats))
         failed_piglets = sum(map(lambda x: 1-x[-2], stats))
+        avg_distance_error = sum(map(lambda x: x[-1]/x[3], stats))
         logger.info("Playground failed: %.2f", failed_pg/n)
         logger.info("Balls failed     : %.2f", failed_balls/n)
         logger.info("Ball error sum     : %d", ball_delta_abs_sum)
         logger.info("Ball error sum rat : %.2f", ball_delta_abs_sum/(7*n)) # NB! assume 7 balls
         logger.info("Piglets failed     : %.2f", failed_piglets/n)
+        logger.info("Average dist err   : %.2f", avg_distance_error/n)
 
 
         with open("stats.json", "w") as fp:
