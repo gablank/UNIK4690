@@ -137,7 +137,7 @@ class RedBallPlaygroundDetector:
             # temp = cv2.blur(temp, (5,5))
             show(temp, scale=True, text="2: Cr")
             temp = power_threshold(temp/255.0, 5)
-            show(temp, scale=True, text="3: Compressed dynamic range")
+            show(temp, scale=True, text="3: Exponentiation")
             kps = surf_detector(temp, hess_thresh=4000)
             # kps = sorted(kps, key=lambda kp: kp.response)[-4:]
             # print("\n".join(map(utilities.pretty_print_keypoint, kps)))
